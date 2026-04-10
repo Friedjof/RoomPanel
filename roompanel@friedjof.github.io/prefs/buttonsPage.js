@@ -81,6 +81,10 @@ function setDropDownValue(dropdown, model, value) {
     return false;
 }
 
+function escapeMarkup(text) {
+    return GLib.markup_escape_text(String(text ?? ''), -1);
+}
+
 // ─── EntitySearchPopover ──────────────────────────────────────────────────────
 
 const EntitySearchPopover = GObject.registerClass(
@@ -302,7 +306,10 @@ class EmojiPickerPopover extends Gtk.Popover {
 const ButtonEditDialog = GObject.registerClass(
 class ButtonEditDialog extends Adw.Dialog {
     _init(config, entities, services, onSave) {
-        super._init({ title: config.label ? `Edit "${config.label}"` : 'New Button',
+        const dialogTitle = config.label
+            ? `Edit "${escapeMarkup(config.label)}"`
+            : 'New Button';
+        super._init({ title: dialogTitle,
             content_width: 480 });
 
         this._config = { label: '', icon: '', color: '',
@@ -503,11 +510,16 @@ class ButtonEditDialog extends Adw.Dialog {
 const ButtonListRow = GObject.registerClass(
 class ButtonListRow extends Adw.ActionRow {
     _init(config, index, onEdit, onDelete) {
+        const rowTitle = escapeMarkup(
+            `${config.icon ?? ''} ${config.label ?? ''}`.trim() || `Button ${index + 1}`
+        );
+        const rowSubtitle = config.entity_id
+            ? escapeMarkup(`${config.domain}.${config.service} → ${config.entity_id}`)
+            : 'Not configured';
+
         super._init({
-            title: `${config.icon ?? ''} ${config.label ?? ''}`.trim() || `Button ${index + 1}`,
-            subtitle: config.entity_id
-                ? `${config.domain}.${config.service} → ${config.entity_id}`
-                : 'Not configured',
+            title: rowTitle,
+            subtitle: rowSubtitle,
             activatable: false,
         });
 
