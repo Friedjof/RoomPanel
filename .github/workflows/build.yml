@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install build dependencies
         run: |
@@ -37,7 +37,7 @@ jobs:
           echo "bundle_path=${renamed_bundle}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload extension bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.bundle.outputs.artifact_name }}
           path: ${{ steps.bundle.outputs.bundle_path }}
