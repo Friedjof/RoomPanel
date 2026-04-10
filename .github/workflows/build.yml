@@ -21,7 +21,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gnome-shell libglib2.0-bin
+          sudo apt-get install -y libglib2.0-bin zip
 
       - name: Build extension bundle
         run: make pack

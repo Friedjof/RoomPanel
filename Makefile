@@ -5,6 +5,7 @@ LOG       = /tmp/roompanel-shell.log
 OUT_DIR   ?= dist
 SCHEMA    = schemas/org.gnome.shell.extensions.roompanel.gschema.xml
 ZIP       = $(OUT_DIR)/$(UUID).shell-extension.zip
+ZIP_ABS   = $(abspath $(ZIP))
 
 SCREEN_RES := $(shell xrandr 2>/dev/null | awk '/ primary/{match($$0,/[0-9]+x[0-9]+/); print substr($$0,RSTART,RLENGTH)}')
 MUTTER_SPECS ?= $(if $(SCREEN_RES),$(SCREEN_RES),1920x1080)
@@ -26,14 +27,17 @@ reinstall: remove install
 
 pack:
 	mkdir -p $(OUT_DIR)
-	glib-compile-schemas $(SRC)/schemas/
-	gnome-extensions pack $(SRC) \
-		--out-dir $(OUT_DIR) \
-		--force \
-		--schema=$(SCHEMA) \
-		--extra-source=lib \
-		--extra-source=prefs \
-		--extra-source=ui
+	glib-compile-schemas --strict $(SRC)/schemas/
+	rm -f $(ZIP_ABS)
+	cd $(SRC) && zip -qr $(ZIP_ABS) \
+		metadata.json \
+		extension.js \
+		prefs.js \
+		stylesheet.css \
+		lib \
+		prefs \
+		ui \
+		$(SCHEMA)
 	@echo "Packed $(ZIP)"
 
 # Launch a nested GNOME Shell session.
