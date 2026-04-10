@@ -4,10 +4,11 @@ import Clutter from 'gi://Clutter';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import { ActionButton } from './actionButton.js';
+import { ColorWheel, rgbToHex } from './colorWheel.js';
 
 /**
  * The dropdown menu content:
- *  ─ Color section (hex input + color preview box)
+ *  ─ Color section (circular color wheel)
  *  ─ Slider section
  *  ─ Action buttons
  */
@@ -26,58 +27,59 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
     _buildUI() {
         // ── Color Section ──────────────────────────────────────────────
-        const colorItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
-        this.addMenuItem(colorItem);
+        this._colorItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+        this.addMenuItem(this._colorItem);
 
         const colorBox = new St.BoxLayout({
-            vertical: false,
+            vertical: true,
             style_class: 'roompanel-menu',
             x_expand: true,
         });
-        colorItem.add_child(colorBox);
+        this._colorItem.add_child(colorBox);
+
+        const colorHeader = new St.BoxLayout({
+            vertical: false,
+            style_class: 'roompanel-color-header',
+            x_expand: true,
+        });
+        colorBox.add_child(colorHeader);
 
         const colorLabel = new St.Label({
             text: 'Color',
             style_class: 'roompanel-section-label',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        colorBox.add_child(colorLabel);
+        colorHeader.add_child(colorLabel);
 
-        this._hexEntry = new St.Entry({
-            style_class: 'roompanel-hex-entry',
-            hint_text: '#rrggbb',
-            can_focus: true,
+        this._colorValue = new St.Label({
+            text: '#ffffff',
+            style_class: 'roompanel-color-value',
             x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
         });
-        colorBox.add_child(this._hexEntry);
+        colorHeader.add_child(this._colorValue);
 
         this._colorPreview = new St.Widget({
             style_class: 'roompanel-color-preview',
             style: 'background-color: #ffffff;',
         });
-        colorBox.add_child(this._colorPreview);
+        colorHeader.add_child(this._colorPreview);
 
-        this._hexEntry.clutter_text.connect('text-changed', () => {
-            if (this._colorSourceId) {
-                GLib.source_remove(this._colorSourceId);
-                this._colorSourceId = null;
-            }
-            this._colorSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-                this._onColorChanged();
-                this._colorSourceId = null;
-                return GLib.SOURCE_REMOVE;
-            });
-        });
+        this._colorWheel = new ColorWheel();
+        this._colorWheel.connect('color-changed', () => this._queueColorChanged());
+        colorBox.add_child(this._colorWheel);
+        this._updateColorPreview(this._colorWheel.getColor());
 
         // ── Separator ─────────────────────────────────────────────────
-        this.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._colorSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.addMenuItem(this._colorSeparator);
 
         // ── Slider Section ────────────────────────────────────────────
-        const sliderItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
-        this.addMenuItem(sliderItem);
+        this._sliderItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+        this.addMenuItem(this._sliderItem);
 
         const sliderBox = new St.BoxLayout({ vertical: true, x_expand: true });
-        sliderItem.add_child(sliderBox);
+        this._sliderItem.add_child(sliderBox);
 
         const sliderLabel = new St.Label({
             text: 'Value',
@@ -94,14 +96,15 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
                 this._sliderSourceId = null;
             }
             this._sliderSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-                this._onSliderChanged();
+                void this._onSliderChanged();
                 this._sliderSourceId = null;
                 return GLib.SOURCE_REMOVE;
             });
         });
 
         // ── Separator ─────────────────────────────────────────────────
-        this.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._sliderSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.addMenuItem(this._sliderSeparator);
 
         // ── Action Buttons ────────────────────────────────────────────
         this._buttonsItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
@@ -121,7 +124,23 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._settingsChangedId = this._settings.connect('changed', (_settings, key) => {
             if (key === 'buttons-config' || key === 'button-count')
                 this._rebuildButtons();
+
+            if (key === 'color-entity' || key === 'slider-entity')
+                this._syncSectionVisibility();
         });
+
+        this._syncSectionVisibility();
+    }
+
+    _syncSectionVisibility() {
+        const showColor = this._settings.get_string('color-entity').trim() !== '';
+        const showSlider = this._settings.get_string('slider-entity').trim() !== '';
+        const showButtons = true;
+
+        this._colorItem.visible = showColor;
+        this._sliderItem.visible = showSlider;
+        this._colorSeparator.visible = showColor && (showSlider || showButtons);
+        this._sliderSeparator.visible = showSlider && showButtons;
     }
 
     _rebuildButtons() {
@@ -154,26 +173,34 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         }
     }
 
-    _hexToRgb(hex) {
-        const m = hex.trim().match(/^#?([0-9a-fA-F]{6})$/);
-        if (!m) return null;
-        const n = parseInt(m[1], 16);
-        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    _updateColorPreview(rgb) {
+        const hex = rgbToHex(rgb);
+        this._colorValue.text = hex;
+        this._colorPreview.set_style(`background-color: ${hex};`);
+    }
+
+    _queueColorChanged() {
+        this._updateColorPreview(this._colorWheel.getColor());
+
+        if (this._colorSourceId) {
+            GLib.source_remove(this._colorSourceId);
+            this._colorSourceId = null;
+        }
+
+        this._colorSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+            void this._onColorChanged();
+            this._colorSourceId = null;
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     async _onColorChanged() {
-        const hex = this._hexEntry.get_text().trim();
-        const rgb = this._hexToRgb(hex);
-        if (!rgb) return;
-
-        this._colorPreview.set_style(
-            `background-color: ${hex.startsWith('#') ? hex : '#' + hex};`
-        );
-
+        const rgb = this._colorWheel.getColor();
         const entity = this._settings.get_string('color-entity');
         const service = this._settings.get_string('color-service');
         const attribute = this._settings.get_string('color-attribute');
-        if (!entity || !service) return;
+        if (!entity || !service)
+            return;
 
         const [domain, svc] = service.split('.');
         try {
@@ -188,7 +215,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         const entity = this._settings.get_string('slider-entity');
         const service = this._settings.get_string('slider-service');
         const attribute = this._settings.get_string('slider-attribute');
-        if (!entity || !service) return;
+        if (!entity || !service)
+            return;
 
         const min = this._settings.get_double('slider-min');
         const max = this._settings.get_double('slider-max');

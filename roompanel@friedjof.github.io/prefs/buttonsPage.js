@@ -17,6 +17,70 @@ const EMOJI_CATEGORIES = {
     'Scenes':     ['🌅', '🌆', '🎬', '🎉', '🌈', '🕯️', '🪔', '🔦', '💫'],
 };
 
+function getServiceEntries(apiServices) {
+    const entries = [];
+
+    if (Array.isArray(apiServices) && apiServices.length > 0) {
+        for (const entry of apiServices) {
+            const names = Array.isArray(entry.services)
+                ? entry.services
+                : Object.keys(entry.services ?? {});
+            for (const service of names)
+                entries.push({ domain: entry.domain, service });
+        }
+    } else if (apiServices && typeof apiServices === 'object') {
+        for (const [domain, services] of Object.entries(apiServices)) {
+            for (const service of Object.keys(services ?? {}))
+                entries.push({ domain, service });
+        }
+    } else {
+        for (const key of getKnownServiceKeys()) {
+            const [domain, ...rest] = key.split('.');
+            entries.push({ domain, service: rest.join('.') });
+        }
+    }
+
+    entries.sort((a, b) => `${a.domain}.${a.service}`.localeCompare(`${b.domain}.${b.service}`));
+    return entries;
+}
+
+function getServiceDomains(apiServices, extraDomains = []) {
+    const domains = new Set(getServiceEntries(apiServices).map(entry => entry.domain));
+    for (const domain of extraDomains) {
+        if (domain)
+            domains.add(domain);
+    }
+    return [...domains].sort();
+}
+
+function createStringList(values) {
+    const model = new Gtk.StringList();
+    for (const value of values)
+        model.append(value);
+    return model;
+}
+
+function getDropDownValue(dropdown) {
+    const item = dropdown.get_selected_item();
+    return item ? item.get_string() : '';
+}
+
+function setDropDownValue(dropdown, model, value) {
+    const count = model.get_n_items();
+    for (let i = 0; i < count; i++) {
+        const item = model.get_item(i);
+        if (item?.get_string() === value) {
+            dropdown.set_selected(i);
+            return true;
+        }
+    }
+
+    if (count > 0)
+        dropdown.set_selected(0);
+
+    return false;
+}
+
 // ─── EntitySearchPopover ──────────────────────────────────────────────────────
 
 const EntitySearchPopover = GObject.registerClass(
@@ -330,21 +394,39 @@ class ButtonEditDialog extends Adw.Dialog {
             this._entityRow.text = entityId;
             this._config.entity_id = entityId;
             const domain = entityId.split('.')[0];
-            this._config.domain = domain;
-            this._servicePopover.setDomainFilter(domain);
+            this._setSelectedDomain(domain);
         });
         this._entityPopover.set_parent(entitySearchBtn);
         if (entities?.length) this._entityPopover.setEntities(entities);
         entitySearchBtn.connect('clicked', () => this._entityPopover.popup());
         this._entityRow.connect('changed', () => {
             this._config.entity_id = this._entityRow.text;
-            this._config.domain = this._entityRow.text.split('.')[0];
+            const domain = this._entityRow.text.split('.')[0];
+            if (domain)
+                this._setSelectedDomain(domain);
         });
 
-        // Service (domain.service format)
-        this._serviceRow = new Adw.EntryRow({ title: 'Service (domain.service)',
-            text: this._config.domain && this._config.service
-                ? `${this._config.domain}.${this._config.service}` : '' });
+        const domainRow = new Adw.ActionRow({ title: 'Service Domain' });
+        this._domainModel = createStringList(getServiceDomains(services, [this._config.domain]));
+        this._domainDropdown = new Gtk.DropDown({
+            model: this._domainModel,
+            valign: Gtk.Align.CENTER,
+        });
+        domainRow.add_suffix(this._domainDropdown);
+        domainRow.activatable_widget = this._domainDropdown;
+        actionGroup.add(domainRow);
+
+        const initialDomain = this._config.domain || this._config.entity_id.split('.')[0];
+        this._setSelectedDomain(initialDomain);
+        this._domainDropdown.connect('notify::selected-item', () => {
+            this._config.domain = getDropDownValue(this._domainDropdown);
+            this._servicePopover?.setDomainFilter(this._config.domain);
+        });
+
+        this._serviceRow = new Adw.EntryRow({
+            title: 'Service',
+            text: this._config.service,
+        });
         actionGroup.add(this._serviceRow);
 
         const serviceSearchBtn = new Gtk.Button({ icon_name: 'system-search-symbolic',
@@ -352,8 +434,8 @@ class ButtonEditDialog extends Adw.Dialog {
         this._serviceRow.add_suffix(serviceSearchBtn);
 
         this._servicePopover = new ServiceSearchPopover((domain, service) => {
-            this._serviceRow.text = `${domain}.${service}`;
-            this._config.domain = domain;
+            this._setSelectedDomain(domain);
+            this._serviceRow.text = service;
             this._config.service = service;
             // Auto-fill service_data from template
             const tpl = getTemplate(domain, service);
@@ -363,34 +445,20 @@ class ButtonEditDialog extends Adw.Dialog {
             }
         });
         this._servicePopover.set_parent(serviceSearchBtn);
-        if (this._config.domain)
-            this._servicePopover.setDomainFilter(this._config.domain);
-
         if (services?.length)
             this._servicePopover.setServices(services);
         else
             this._servicePopover.setFallbackServices();
 
-        serviceSearchBtn.connect('clicked', () => this._servicePopover.popup());
-        this._serviceRow.connect('changed', () => {
-            const parts = this._serviceRow.text.split('.');
-            this._config.domain = parts[0] ?? '';
-            this._config.service = parts.slice(1).join('.') ?? '';
+        serviceSearchBtn.connect('clicked', () => {
             this._servicePopover.setDomainFilter(this._config.domain);
+            this._servicePopover.popup();
         });
+        this._serviceRow.connect('changed', () => { this._config.service = this._serviceRow.text; });
 
         // ── Advanced toggle ───────────────────────────────────────────
         const advancedRow = new Adw.ExpanderRow({ title: 'Advanced' });
         actionGroup.add(advancedRow);
-
-        // Domain override (readonly hint)
-        const domainRow = new Adw.EntryRow({ title: 'Domain override',
-            text: this._config.domain });
-        advancedRow.add_row(domainRow);
-        domainRow.connect('changed', () => { this._config.domain = domainRow.text; });
-
-        // Sync domain row when service changes
-        this._serviceRow.connect('changed', () => { domainRow.text = this._config.domain; });
 
         // Service data JSON
         this._serviceDataRow = new Adw.EntryRow({
@@ -421,6 +489,12 @@ class ButtonEditDialog extends Adw.Dialog {
             this._onSave({ ...this._config });
             this.close();
         });
+    }
+
+    _setSelectedDomain(domain) {
+        setDropDownValue(this._domainDropdown, this._domainModel, domain);
+        this._config.domain = getDropDownValue(this._domainDropdown);
+        this._servicePopover?.setDomainFilter(this._config.domain);
     }
 });
 
