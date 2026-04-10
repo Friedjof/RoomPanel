@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.roompanel"
+          path="/org/gnome/shell/extensions/roompanel/">
+
+    <!-- Home Assistant Connection -->
+    <key name="ha-url" type="s">
+      <default>""</default>
+      <summary>Home Assistant URL</summary>
+      <description>Base URL of the Home Assistant instance, e.g. http://homeassistant.local:8123</description>
+    </key>
+    <key name="ha-token" type="s">
+      <default>""</default>
+      <summary>Home Assistant Long-Lived Access Token</summary>
+      <description>Long-lived access token for authenticating with Home Assistant</description>
+    </key>
+    <key name="ha-verify-ssl" type="b">
+      <default>true</default>
+      <summary>Verify SSL Certificate</summary>
+      <description>Whether to verify the SSL certificate of the Home Assistant instance</description>
+    </key>
+
+    <!-- Color Picker -->
+    <key name="color-entity" type="s">
+      <default>""</default>
+      <summary>Color Picker Entity ID</summary>
+      <description>Home Assistant entity to control with the color picker</description>
+    </key>
+    <key name="color-service" type="s">
+      <default>"light.turn_on"</default>
+      <summary>Color Picker Service</summary>
+      <description>Service to call for color changes, e.g. light.turn_on</description>
+    </key>
+    <key name="color-attribute" type="s">
+      <default>"rgb_color"</default>
+      <summary>Color Picker Service Attribute</summary>
+      <description>Service data attribute for color, e.g. rgb_color</description>
+    </key>
+
+    <!-- Slider -->
+    <key name="slider-entity" type="s">
+      <default>""</default>
+      <summary>Slider Entity ID</summary>
+      <description>Home Assistant entity to control with the slider</description>
+    </key>
+    <key name="slider-service" type="s">
+      <default>"light.turn_on"</default>
+      <summary>Slider Service</summary>
+      <description>Service to call on slider change, e.g. light.turn_on</description>
+    </key>
+    <key name="slider-attribute" type="s">
+      <default>"brightness"</default>
+      <summary>Slider Service Attribute</summary>
+      <description>Service data attribute for the slider value, e.g. brightness</description>
+    </key>
+    <key name="slider-min" type="d">
+      <default>0.0</default>
+      <summary>Slider Minimum Value</summary>
+      <description>Minimum value sent to Home Assistant</description>
+    </key>
+    <key name="slider-max" type="d">
+      <default>255.0</default>
+      <summary>Slider Maximum Value</summary>
+      <description>Maximum value sent to Home Assistant</description>
+    </key>
+
+    <!-- Action Buttons -->
+    <key name="button-count" type="i">
+      <default>2</default>
+      <range min="0" max="10"/>
+      <summary>Number of Action Buttons</summary>
+      <description>How many action buttons to show in the panel menu</description>
+    </key>
+    <key name="buttons-config" type="s">
+      <default>"[]"</default>
+      <summary>Action Buttons Configuration</summary>
+      <description>JSON array with button configurations (label, icon, entity_id, domain, service, service_data)</description>
+    </key>
+
+    <!-- YAML Backup -->
+    <key name="auto-yaml-backup" type="b">
+      <default>false</default>
+      <summary>Auto YAML Backup</summary>
+      <description>Automatically sync settings to a YAML file on every change</description>
+    </key>
+    <key name="yaml-backup-path" type="s">
+      <default>""</default>
+      <summary>YAML Backup File Path</summary>
+      <description>Path where the YAML backup file is written</description>
+    </key>
+
+  </schema>
+</schemalist>
