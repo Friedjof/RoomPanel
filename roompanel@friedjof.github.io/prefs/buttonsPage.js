@@ -559,7 +559,7 @@ class ButtonsPage extends Adw.PreferencesPage {
         this.add(haGroup);
 
         const loadRow = new Adw.ActionRow({
-            title: 'Sync Entities & Services',
+            title: 'Sync Entities and Services',
             subtitle: 'Fetches live data from your Home Assistant instance',
         });
         haGroup.add(loadRow);
