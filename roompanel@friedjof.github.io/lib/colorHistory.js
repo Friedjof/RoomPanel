@@ -1,6 +1,6 @@
 import GLib from 'gi://GLib';
 
-const HISTORY_LIMIT = 6;
+const HISTORY_LIMIT = 4;
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));

@@ -11,6 +11,10 @@
   spacing: 6px;
 }
 
+.roompanel-color-info {
+  spacing: 0;
+}
+
 .roompanel-section-label {
   font-size: 0.85em;
   font-weight: bold;
@@ -25,6 +29,16 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+.roompanel-entity-label {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.84em;
+  padding-left: 2px;
+}
+
+.roompanel-current-color {
+  spacing: 6px;
+}
+
 .roompanel-icon-button {
   min-width: 30px;
   min-height: 30px;
@@ -32,10 +46,7 @@
 }
 
 .roompanel-color-preview {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  margin-right: 2px;
 }
 
 .roompanel-color-body {
@@ -51,6 +62,8 @@
 .roompanel-color-history {
   spacing: 6px;
   margin-top: 2px;
+  width: 88px;
+  min-width: 88px;
 }
 
 .roompanel-history-swatch {
@@ -61,6 +74,16 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   padding: 0;
+}
+
+.roompanel-history-header {
+  width: 88px;
+  min-width: 88px;
+}
+
+.roompanel-history-title {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.8em;
 }
 
 .roompanel-history-placeholder {

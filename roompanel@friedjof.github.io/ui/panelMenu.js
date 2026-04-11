@@ -11,6 +11,24 @@ function entityMatchesDomain(entityId, domain) {
     return Boolean(entityId) && Boolean(domain) && entityId.split('.')[0] === domain;
 }
 
+function formatEntityLabel(entityId) {
+    const value = String(entityId ?? '').trim();
+    if (!value)
+        return 'No entity selected';
+
+    const separatorIndex = value.indexOf('.');
+    const objectId = separatorIndex >= 0 ? value.slice(separatorIndex + 1) : value;
+    return objectId
+        .split('_')
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function buildColorPreviewStyle(hex) {
+    return `background-color: ${hex}; width: 26px; height: 26px; min-width: 26px; min-height: 26px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.3);`;
+}
+
 /**
  * The dropdown menu content:
  *  ─ Color section (circular color wheel)
@@ -51,26 +69,46 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         colorBox.add_child(colorHeader);
 
+        const colorInfoBox = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            style_class: 'roompanel-color-info',
+        });
+        colorHeader.add_child(colorInfoBox);
+
         const colorLabel = new St.Label({
             text: 'Color',
             style_class: 'roompanel-section-label',
+        });
+        colorInfoBox.add_child(colorLabel);
+
+        this._colorEntityLabel = new St.Label({
+            text: '',
+            style_class: 'roompanel-entity-label',
+            x_expand: true,
+        });
+        colorInfoBox.add_child(this._colorEntityLabel);
+
+        const currentColorBox = new St.BoxLayout({
+            vertical: false,
+            style_class: 'roompanel-current-color',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        colorHeader.add_child(colorLabel);
+        colorHeader.add_child(currentColorBox);
+
+        this._colorPreview = new St.Widget({
+            style_class: 'roompanel-color-preview',
+            y_align: Clutter.ActorAlign.CENTER,
+            style: buildColorPreviewStyle('#ffffff'),
+        });
+        currentColorBox.add_child(this._colorPreview);
 
         this._colorValue = new St.Label({
             text: '#ffffff',
             style_class: 'roompanel-color-value',
-            x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        colorHeader.add_child(this._colorValue);
-
-        this._colorPreview = new St.Widget({
-            style_class: 'roompanel-color-preview',
-            style: 'background-color: #ffffff;',
-        });
-        colorHeader.add_child(this._colorPreview);
+        currentColorBox.add_child(this._colorValue);
 
         this._colorWheel = new ColorWheel();
         this._colorWheel.connect('color-changed', () => this._queueColorChanged());
@@ -87,7 +125,20 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         this._copyButton.set_child(this._copyButtonIcon);
         this._copyButton.connect('clicked', () => this._copyCurrentColor());
-        colorHeader.add_child(this._copyButton);
+        currentColorBox.add_child(this._copyButton);
+
+        const historyHeader = new St.BoxLayout({
+            vertical: false,
+            style_class: 'roompanel-history-header',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._historyLabel = new St.Label({
+            text: 'History',
+            style_class: 'roompanel-history-title',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        historyHeader.add_child(this._historyLabel);
+        colorHeader.add_child(historyHeader);
 
         const colorBody = new St.BoxLayout({
             vertical: false,
@@ -105,6 +156,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         colorBody.add_child(this._historyBox);
         this._updateColorPreview(this._colorWheel.getColor());
+        this._updateColorEntityLabel();
         this._rebuildColorHistory();
 
         // ── Separator ─────────────────────────────────────────────────
@@ -168,9 +220,13 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
             if (key === 'color-entity' || key === 'slider-entity')
                 this._syncSectionVisibility();
+
+            if (key === 'color-entity')
+                this._updateColorEntityLabel();
         });
 
         this._syncSectionVisibility();
+        this._updateColorEntityLabel();
     }
 
     _syncSectionVisibility() {
@@ -227,7 +283,11 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     _updateColorPreview(rgb) {
         const hex = rgbToHex(rgb);
         this._colorValue.text = hex;
-        this._colorPreview.set_style(`background-color: ${hex};`);
+        this._colorPreview.set_style(buildColorPreviewStyle(hex));
+    }
+
+    _updateColorEntityLabel() {
+        this._colorEntityLabel.text = formatEntityLabel(this._settings.get_string('color-entity'));
     }
 
     _copyCurrentColor() {
