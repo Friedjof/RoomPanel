@@ -15,7 +15,10 @@ function applyObjectToSettings(obj, settings) {
     if (c.verify_ssl !== undefined) settings.set_boolean('ha-verify-ssl', !!c.verify_ssl);
 
     const color = obj.panel?.color ?? {};
-    if (color.entity !== undefined) settings.set_string('color-entity', String(color.entity));
+    if (Array.isArray(color.entities))
+        settings.set_strv('color-entities', color.entities.map(String));
+    else if (color.entity !== undefined)
+        settings.set_strv('color-entities', [String(color.entity)].filter(Boolean));
     if (color.service !== undefined) settings.set_string('color-service', String(color.service));
     if (color.attribute !== undefined) settings.set_string('color-attribute', String(color.attribute));
 

@@ -31,7 +31,7 @@ export function settingsToObject(settings) {
         },
         panel: {
             color: {
-                entity: settings.get_string('color-entity'),
+                entities: settings.get_strv('color-entities'),
                 service: settings.get_string('color-service'),
                 attribute: settings.get_string('color-attribute'),
             },

@@ -657,18 +657,13 @@ class ButtonsPage extends Adw.PreferencesPage {
         // ── Color Picker Group ────────────────────────────────────────
         const colorGroup = new Adw.PreferencesGroup({
             title: 'Color Picker',
-            description: 'Entity and service called when the color is changed',
+            description: 'Service called when the color is changed',
         });
         this.add(colorGroup);
 
-        this._colorEntityRow = this._makeEntityRow(
-            'Entity ID', 'color-entity', settings,
-            () => this._colorServiceRow?.text.split('.')[0] || 'light');
-        colorGroup.add(this._colorEntityRow);
-
         this._colorServiceRow = this._makeServiceRow(
             'Service (domain.service)', 'color-service', settings,
-            () => this._colorEntityRow.text.split('.')[0]);
+            () => '');
         colorGroup.add(this._colorServiceRow);
 
         this._colorAttributeRow = new Adw.EntryRow({
@@ -678,6 +673,33 @@ class ButtonsPage extends Adw.PreferencesPage {
         colorGroup.add(this._colorAttributeRow);
         this._colorAttributeRow.connect('changed', () =>
             settings.set_string('color-attribute', this._colorAttributeRow.text));
+
+        // ── Color Picker Entities Sub-group ───────────────────────────
+        this._colorEntitiesGroup = new Adw.PreferencesGroup({
+            title: 'Color Picker Entities',
+            description: 'Up to 4 entities controlled together by the color picker',
+        });
+        this.add(this._colorEntitiesGroup);
+
+        this._colorEntityRows = [];
+        const addColorEntityBtn = new Gtk.Button({
+            icon_name: 'list-add-symbolic',
+            css_classes: ['flat', 'circular'],
+            valign: Gtk.Align.CENTER,
+            tooltip_text: 'Add entity (max 4)',
+        });
+        this._colorEntitiesGroup.set_header_suffix(addColorEntityBtn);
+        this._addColorEntityBtn = addColorEntityBtn;
+
+        this._rebuildColorEntityRows(settings);
+
+        addColorEntityBtn.connect('clicked', () => {
+            const entities = settings.get_strv('color-entities');
+            if (entities.length >= 4) return;
+            entities.push('');
+            settings.set_strv('color-entities', entities);
+            this._rebuildColorEntityRows(settings);
+        });
 
         // ── Slider Group ──────────────────────────────────────────────
         const sliderGroup = new Adw.PreferencesGroup({
@@ -798,10 +820,97 @@ class ButtonsPage extends Adw.PreferencesPage {
         return row;
     }
 
+    // ── Dynamic color entity rows ────────────────────────────────────
+
+    _rebuildColorEntityRows(settings) {
+        for (const row of this._colorEntityRows)
+            this._colorEntitiesGroup.remove(row);
+        this._colorEntityRows = [];
+
+        const entities = settings.get_strv('color-entities');
+
+        if (entities.length === 0) {
+            const placeholder = new Adw.ActionRow({
+                title: 'No entities configured',
+                subtitle: 'Click + to add a color entity',
+                sensitive: false,
+            });
+            this._colorEntitiesGroup.add(placeholder);
+            this._colorEntityRows.push(placeholder);
+        }
+
+        for (let i = 0; i < entities.length; i++) {
+            const idx = i;
+            const row = new Adw.EntryRow({
+                title: `Entity ${i + 1}`,
+                text: entities[i],
+            });
+
+            const searchBtn = new Gtk.Button({
+                icon_name: 'system-search-symbolic',
+                valign: Gtk.Align.CENTER,
+                css_classes: ['flat'],
+                tooltip_text: 'Browse entities',
+            });
+            row.add_suffix(searchBtn);
+
+            const removeBtn = new Gtk.Button({
+                icon_name: 'list-remove-symbolic',
+                css_classes: ['flat', 'destructive-action'],
+                valign: Gtk.Align.CENTER,
+                tooltip_text: 'Remove entity',
+            });
+            row.add_suffix(removeBtn);
+
+            const popover = new EntitySearchPopover(entityId => {
+                row.text = entityId;
+                const current = settings.get_strv('color-entities');
+                current[idx] = entityId;
+                settings.set_strv('color-entities', current);
+            });
+            popover.set_parent(searchBtn);
+            row._entityPopover = popover;
+
+            searchBtn.connect('clicked', () => {
+                const domain = this._colorServiceRow?.text.split('.')[0] || 'light';
+                popover.setDomainFilter(domain);
+                popover.popup();
+            });
+
+            row.connect('changed', () => {
+                const current = settings.get_strv('color-entities');
+                if (idx < current.length) {
+                    current[idx] = row.text;
+                    settings.set_strv('color-entities', current);
+                }
+            });
+
+            removeBtn.connect('clicked', () => {
+                const current = settings.get_strv('color-entities');
+                current.splice(idx, 1);
+                const selected = settings.get_strv('color-selected')
+                    .filter(e => current.includes(e));
+                settings.set_strv('color-selected', selected);
+                settings.set_strv('color-entities', current);
+                this._rebuildColorEntityRows(settings);
+            });
+
+            this._colorEntitiesGroup.add(row);
+            this._colorEntityRows.push(row);
+        }
+
+        this._addColorEntityBtn.sensitive = entities.length < 4;
+
+        // Re-distribute already-loaded entities to the fresh popovers
+        if (this._entities?.length > 0)
+            this._distributeEntities();
+    }
+
     // ── Update popovers with fresh HA data ───────────────────────────
 
     _distributeEntities() {
-        this._colorEntityRow._entityPopover?.setEntities(this._entities);
+        for (const row of (this._colorEntityRows || []))
+            row._entityPopover?.setEntities(this._entities);
         this._sliderEntityRow._entityPopover?.setEntities(this._entities);
     }
 
@@ -848,7 +957,6 @@ class ButtonsPage extends Adw.PreferencesPage {
 
     _repairLoadedConfigurations() {
         let repairs = 0;
-        repairs += this._repairPanelEntity('color-entity', 'color-service', this._colorEntityRow);
         repairs += this._repairPanelEntity('slider-entity', 'slider-service', this._sliderEntityRow);
         repairs += this._repairButtonConfigs();
 

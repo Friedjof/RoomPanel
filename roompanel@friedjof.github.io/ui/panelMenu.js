@@ -51,6 +51,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         // incoming HA state updates for this many milliseconds so the UI does
         // not jump back to the "old" value that HA briefly echoes.
         this._suppressLiveUntil = 0;
+        this._entityNames = {}; // entityId → friendly_name cache
 
         this._buildUI();
         this._connectSettings();
@@ -228,8 +229,17 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         colorRightCol.add_child(this._historyBox);
 
+        // ── Chip selector (shown only when > 1 entity) ───────────────
+        this._chipRow = new St.BoxLayout({
+            vertical: false,
+            x_expand: true,
+            style_class: 'roompanel-chip-row',
+        });
+        colorBox.add_child(this._chipRow);
+
         this._updateColorPreview(this._colorWheel.getColor());
         this._updateColorEntityLabel();
+        this._rebuildChips();
         this._rebuildColorHistory();
 
         // ── Slider Section (no separator above — saves vertical space) ──
@@ -287,14 +297,15 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             if (key === 'buttons-config' || key === 'button-count')
                 this._rebuildButtons();
 
-            if (key === 'color-entity' || key === 'slider-entity') {
+            if (key === 'color-entities' || key === 'slider-entity') {
                 this._syncSectionVisibility();
-                // Re-hydrate initial state when entity assignment changes
                 this._hydrateInitialState();
             }
 
-            if (key === 'color-entity')
+            if (key === 'color-entities' || key === 'color-selected') {
                 this._updateColorEntityLabel();
+                this._rebuildChips();
+            }
 
             if (key === 'slider-entity')
                 this._updateSliderLabel();
@@ -321,16 +332,29 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
      * Called on startup and whenever the watched entities change.
      */
     async _hydrateInitialState() {
-        const colorEntity = this._settings.get_string('color-entity').trim();
-        const sliderEntity = this._settings.get_string('slider-entity').trim();
+        const all = this._settings.get_strv('color-entities').filter(Boolean);
+        const liveEntity = this._getLiveSyncEntity();
+        let chipsNeedRebuild = false;
 
-        if (colorEntity) {
+        for (const entityId of all) {
             try {
-                const state = await this._haClient.getState(colorEntity);
-                this._applyColorState(state);
+                const state = await this._haClient.getState(entityId);
+                const name = state?.attributes?.friendly_name;
+                if (name && this._entityNames[entityId] !== name) {
+                    this._entityNames[entityId] = name;
+                    chipsNeedRebuild = true;
+                }
+                if (entityId === liveEntity)
+                    this._applyColorState(state);
             } catch { /* entity not found or no connection yet */ }
         }
 
+        if (chipsNeedRebuild) {
+            this._rebuildChips();
+            this._updateColorEntityLabel();
+        }
+
+        const sliderEntity = this._settings.get_string('slider-entity').trim();
         if (sliderEntity) {
             try {
                 const state = await this._haClient.getState(sliderEntity);
@@ -346,19 +370,31 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     _onLiveStateChanged({ entity_id, new_state }) {
         if (!new_state) return;
 
-        const colorEntity = this._settings.get_string('color-entity').trim();
         const sliderEntity = this._settings.get_string('slider-entity').trim();
 
         if (entity_id === sliderEntity) {
             const suppressed = Date.now() < this._suppressLiveUntil;
-            console.log(`[RoomPanel] slider live event: ${entity_id}, suppressed=${suppressed}, attrs=${JSON.stringify(new_state?.attributes)}`);
+            console.log(`[RoomPanel] slider live event: ${entity_id}, suppressed=${suppressed}`);
         }
 
         if (Date.now() < this._suppressLiveUntil) return;
 
-        // Both checks independent — same entity can drive color AND slider
-        if (entity_id === colorEntity)
+        // Cache friendly name if available
+        const friendlyName = new_state?.attributes?.friendly_name;
+        if (friendlyName && this._entityNames[entity_id] !== friendlyName) {
+            this._entityNames[entity_id] = friendlyName;
+            const all = this._settings.get_strv('color-entities').filter(Boolean);
+            if (all.includes(entity_id)) {
+                this._rebuildChips();
+                this._updateColorEntityLabel();
+            }
+        }
+
+        // Color: only sync when exactly 1 entity is targeted
+        const liveEntity = this._getLiveSyncEntity();
+        if (liveEntity && entity_id === liveEntity)
             this._applyColorState(new_state);
+
         if (entity_id === sliderEntity)
             this._applySliderState(new_state);
     }
@@ -405,8 +441,73 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._suppressLiveUntil = Date.now() + 2000;
     }
 
+    /**
+     * Returns the single entity to use for live-sync updates, or null when
+     * multiple entities are targeted (ambiguous which color to show in wheel).
+     */
+    _getLiveSyncEntity() {
+        const all = this._settings.get_strv('color-entities').filter(Boolean);
+        const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
+        const targets = selected.length > 0 ? selected : all;
+        return targets.length === 1 ? targets[0] : null;
+    }
+
+    /** Rebuild the chip selector row from current color-entities / color-selected. */
+    _rebuildChips() {
+        const children = this._chipRow.get_children();
+        for (const child of children)
+            this._chipRow.remove_child(child);
+
+        const all = this._settings.get_strv('color-entities').filter(Boolean);
+        const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
+
+        this._chipRow.visible = all.length > 1;
+        if (all.length <= 1) return;
+
+        for (const entityId of all) {
+            const isActive = selected.length === 0 || selected.includes(entityId);
+            const chip = new St.Button({
+                style_class: 'roompanel-chip' + (isActive ? ' roompanel-chip-active' : ''),
+                can_focus: true,
+                reactive: true,
+                x_expand: true,
+            });
+            const chipLabel = new St.Label({
+                text: this._entityNames[entityId] ?? formatEntityLabel(entityId),
+                y_align: Clutter.ActorAlign.CENTER,
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            chip.set_child(chipLabel);
+            chip.connect('clicked', () => this._toggleChip(entityId));
+            this._chipRow.add_child(chip);
+        }
+    }
+
+    /** Toggle an entity in/out of color-selected. */
+    _toggleChip(entityId) {
+        const all = this._settings.get_strv('color-entities').filter(Boolean);
+        let selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
+
+        // Empty means all selected — materialise it before toggling
+        if (selected.length === 0) selected = [...all];
+
+        const wasSelected = selected.includes(entityId);
+        let next;
+        if (wasSelected) {
+            next = selected.filter(e => e !== entityId);
+            if (next.length === 0) next = [...all]; // can't deselect last → reset to all
+        } else {
+            next = [...selected, entityId];
+        }
+
+        // If all are selected, store as empty (canonical "all" representation)
+        if (next.length === all.length) next = [];
+
+        this._settings.set_strv('color-selected', next);
+    }
+
     _syncSectionVisibility() {
-        const showColor = this._settings.get_string('color-entity').trim() !== '';
+        const showColor = this._settings.get_strv('color-entities').some(Boolean);
         const showSlider = this._settings.get_string('slider-entity').trim() !== '';
 
         this._colorItem.visible = showColor;
@@ -467,7 +568,16 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     }
 
     _updateColorEntityLabel() {
-        this._colorEntityLabel.text = formatEntityLabel(this._settings.get_string('color-entity'));
+        const all = this._settings.get_strv('color-entities').filter(Boolean);
+        const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
+        const targets = selected.length > 0 ? selected : all;
+
+        if (targets.length === 0)
+            this._colorEntityLabel.text = 'No entity selected';
+        else if (targets.length === 1)
+            this._colorEntityLabel.text = this._entityNames[targets[0]] ?? formatEntityLabel(targets[0]);
+        else
+            this._colorEntityLabel.text = `${targets.length} entities`;
     }
 
     _updateSliderLabel() {
@@ -635,23 +745,26 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     }
 
     async _sendColor(rgb) {
-        const entity = this._settings.get_string('color-entity');
+        const all = this._settings.get_strv('color-entities').filter(Boolean);
+        const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
+        const targets = selected.length > 0 ? selected : all;
         const service = this._settings.get_string('color-service');
         const attribute = this._settings.get_string('color-attribute');
-        if (!entity || !service)
-            return;
+        if (targets.length === 0 || !service) return;
 
         this._markUserCommand();
 
         const [domain, svc] = service.split('.');
-        if (!entityMatchesDomain(entity, domain)) {
-            console.error(`[RoomPanel] Color call skipped: entity "${entity}" does not match service domain "${domain}"`);
+        const validTargets = targets.filter(e => entityMatchesDomain(e, domain));
+        if (validTargets.length === 0) {
+            console.error(`[RoomPanel] Color call skipped: no entities match domain "${domain}"`);
             return;
         }
 
         try {
+            // HA accepts entity_id as array — single request for all targets
             await this._haClient.callService(domain, svc,
-                { entity_id: entity, [attribute]: rgb });
+                { entity_id: validTargets.length === 1 ? validTargets[0] : validTargets, [attribute]: rgb });
         } catch (e) {
             console.error('[RoomPanel] Color call failed:', e.message);
         }

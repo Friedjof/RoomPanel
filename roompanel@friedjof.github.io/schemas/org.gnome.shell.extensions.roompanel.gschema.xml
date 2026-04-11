@@ -21,10 +21,15 @@
     </key>
 
     <!-- Color Picker -->
-    <key name="color-entity" type="s">
-      <default>""</default>
-      <summary>Color Picker Entity ID</summary>
-      <description>Home Assistant entity to control with the color picker</description>
+    <key name="color-entities" type="as">
+      <default>@as []</default>
+      <summary>Color Picker Entity IDs</summary>
+      <description>Home Assistant entities to control with the color picker (up to 4)</description>
+    </key>
+    <key name="color-selected" type="as">
+      <default>@as []</default>
+      <summary>Color Picker Selected Entities</summary>
+      <description>Currently selected entities for color control (empty = all selected)</description>
     </key>
     <key name="color-service" type="s">
       <default>"light.turn_on"</default>
