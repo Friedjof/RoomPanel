@@ -4,8 +4,8 @@
 
 /** Map HA device_class → GNOME symbolic icon name */
 export const DEVICE_CLASS_ICONS = {
-    temperature:                 'thermometer-symbolic',
-    humidity:                    'humidity-symbolic',
+    temperature:                 'weather-clear-symbolic',
+    humidity:                    'weather-showers-symbolic',
     battery:                     'battery-full-symbolic',
     illuminance:                 'weather-clear-symbolic',
     co2:                         'weather-fog-symbolic',
@@ -20,12 +20,12 @@ export const DEVICE_CLASS_ICONS = {
     gas:                         'weather-fog-symbolic',
     voltage:                     'battery-caution-symbolic',
     current:                     'battery-caution-symbolic',
-    power:                       'preferences-system-power-symbolic',
-    energy:                      'preferences-system-power-symbolic',
+    power:                       'power-profile-balanced-symbolic',
+    energy:                      'power-profile-balanced-symbolic',
     signal_strength:             'network-wireless-signal-good-symbolic',
-    pressure:                    'weather-few-clouds-symbolic',
+    pressure:                    'weather-overcast-symbolic',
     speed:                       'weather-windy-symbolic',
-    moisture:                    'humidity-symbolic',
+    moisture:                    'weather-showers-symbolic',
     timestamp:                   'appointment-soon-symbolic',
     duration:                    'hourglass-symbolic',
     distance:                    'find-location-symbolic',
@@ -52,6 +52,42 @@ export function getNumericValue(config, state) {
     const v = getStateValue(config, state);
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
+}
+
+function stripTrailingZeros(text) {
+    return text
+        .replace(/(\.\d*?[1-9])0+$/, '$1')
+        .replace(/\.0+$/, '');
+}
+
+function getDefaultDecimals(value) {
+    const abs = Math.abs(value);
+
+    if (abs >= 100)
+        return 0;
+    if (abs >= 10)
+        return 1;
+    if (abs >= 1)
+        return 1;
+    return 2;
+}
+
+/** Format the displayed sensor value without excessive fractional digits. */
+export function formatDisplayValue(config, state) {
+    const raw = getStateValue(config, state);
+    if (raw === null || raw === undefined || raw === '')
+        return '—';
+
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric))
+        return String(raw);
+
+    const configuredDecimals = Number(config?.decimals);
+    const decimals = Number.isInteger(configuredDecimals)
+        ? Math.max(0, Math.min(4, configuredDecimals))
+        : getDefaultDecimals(numeric);
+
+    return stripTrailingZeros(numeric.toFixed(decimals));
 }
 
 /** Unit to display: config override → HA attribute → empty string. */

@@ -1,6 +1,7 @@
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
-import { getStateValue, getUnit, getIcon, getName } from './sensorHelpers.js';
+import Pango from 'gi://Pango';
+import { formatDisplayValue, getUnit, getIcon, getName } from './sensorHelpers.js';
 
 /**
  * Compact value tile: icon circle | value unit / name.
@@ -41,6 +42,15 @@ export class SensorValueTile {
         });
         this._actor.add_child(col);
 
+        this._nameLabel = new St.Label({
+            text: '',
+            style_class: 'roompanel-sensor-name roompanel-sensor-name-top',
+            x_expand: true,
+        });
+        this._nameLabel.clutter_text.line_wrap = false;
+        this._nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        col.add_child(this._nameLabel);
+
         const valueRow = new St.BoxLayout({
             vertical: false,
             style_class: 'roompanel-sensor-value-row',
@@ -60,17 +70,10 @@ export class SensorValueTile {
             y_align: Clutter.ActorAlign.END,
         });
         valueRow.add_child(this._unitLabel);
-
-        this._nameLabel = new St.Label({
-            text: '',
-            style_class: 'roompanel-sensor-name',
-        });
-        col.add_child(this._nameLabel);
     }
 
     update(state) {
-        const v = getStateValue(this._config, state);
-        this._valueLabel.text = v !== null ? String(v) : '—';
+        this._valueLabel.text = formatDisplayValue(this._config, state);
         this._unitLabel.text = getUnit(this._config, state);
         this._nameLabel.text = getName(this._config, state);
         this._iconActor.icon_name = getIcon(this._config, state);

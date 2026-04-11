@@ -2,7 +2,8 @@ import Cairo from 'cairo';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
-import { getStateValue, getNumericValue, getUnit, getIcon, getName } from './sensorHelpers.js';
+import Pango from 'gi://Pango';
+import { formatDisplayValue, getNumericValue, getUnit, getIcon, getName } from './sensorHelpers.js';
 
 const MAX_SAMPLES = 30;
 
@@ -122,6 +123,8 @@ export class SensorTrendTile {
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
+        this._nameLabel.clutter_text.line_wrap = false;
+        this._nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
         topRow.add_child(this._nameLabel);
 
         const valueRow = new St.BoxLayout({ vertical: false });
@@ -147,8 +150,7 @@ export class SensorTrendTile {
     }
 
     update(state) {
-        const v = getStateValue(this._config, state);
-        this._valueLabel.text = v !== null ? String(v) : '—';
+        this._valueLabel.text = formatDisplayValue(this._config, state);
         this._unitLabel.text  = getUnit(this._config, state);
         this._nameLabel.text  = getName(this._config, state);
         this._iconActor.icon_name = getIcon(this._config, state);

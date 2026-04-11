@@ -281,7 +281,7 @@
 }
 
 .roompanel-sensor-col {
-  spacing: 1px;
+  spacing: 4px;
 }
 
 .roompanel-sensor-value-row {
@@ -304,13 +304,18 @@
   color: rgba(255, 255, 255, 0.56);
 }
 
+.roompanel-sensor-name-top {
+  margin-top: 1px;
+}
+
 .roompanel-sensor-trend-top,
 .roompanel-sensor-gauge-top {
   spacing: 10px;
+  min-height: 38px;
 }
 
 .roompanel-sensor-trend-name {
-  padding-top: 2px;
+  padding-top: 1px;
 }
 
 .roompanel-sparkline {

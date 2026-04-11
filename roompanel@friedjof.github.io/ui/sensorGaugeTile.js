@@ -2,7 +2,8 @@ import Cairo from 'cairo';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
-import { getNumericValue, getUnit, getIcon, getName, getSeverityColor } from './sensorHelpers.js';
+import Pango from 'gi://Pango';
+import { formatDisplayValue, getNumericValue, getUnit, getIcon, getName, getSeverityColor } from './sensorHelpers.js';
 
 // ok=#4caf50  warn=#ffb300  alert=#e53935
 const SEVERITY_RGBA = {
@@ -116,6 +117,15 @@ export class SensorGaugeTile {
         });
         topRow.add_child(col);
 
+        this._nameLabel = new St.Label({
+            text: '',
+            style_class: 'roompanel-sensor-name roompanel-sensor-name-top',
+            x_expand: true,
+        });
+        this._nameLabel.clutter_text.line_wrap = false;
+        this._nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        col.add_child(this._nameLabel);
+
         const valueRow = new St.BoxLayout({ vertical: false });
         col.add_child(valueRow);
 
@@ -133,12 +143,6 @@ export class SensorGaugeTile {
         });
         valueRow.add_child(this._unitLabel);
 
-        this._nameLabel = new St.Label({
-            text: '',
-            style_class: 'roompanel-sensor-name',
-        });
-        col.add_child(this._nameLabel);
-
         this._gaugeBar = new GaugeBar();
         this._actor.add_child(this._gaugeBar);
     }
@@ -146,7 +150,7 @@ export class SensorGaugeTile {
     update(state) {
         const numeric = getNumericValue(this._config, state);
 
-        this._valueLabel.text = numeric !== null ? String(numeric) : '—';
+        this._valueLabel.text = formatDisplayValue(this._config, state);
         this._unitLabel.text  = getUnit(this._config, state);
         this._nameLabel.text  = getName(this._config, state);
         this._iconActor.icon_name = getIcon(this._config, state);
