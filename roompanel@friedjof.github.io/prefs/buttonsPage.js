@@ -85,6 +85,43 @@ function escapeMarkup(text) {
     return GLib.markup_escape_text(String(text ?? ''), -1);
 }
 
+function getEntityDomain(entityId) {
+    return String(entityId ?? '').split('.')[0] || '';
+}
+
+function getEntityObjectId(entityId) {
+    const parts = String(entityId ?? '').split('.');
+    return parts.length > 1 ? parts.slice(1).join('.') : '';
+}
+
+function findReplacementEntityId(entityId, requiredDomain, entities) {
+    if (!entityId || !requiredDomain)
+        return entityId;
+
+    if (getEntityDomain(entityId) === requiredDomain)
+        return entityId;
+
+    const objectId = getEntityObjectId(entityId);
+    if (!objectId)
+        return '';
+
+    const exactId = `${requiredDomain}.${objectId}`;
+    if (entities.some(entity => entity.entity_id === exactId))
+        return exactId;
+
+    const current = entities.find(entity => entity.entity_id === entityId);
+    const currentName = String(current?.attributes?.friendly_name ?? '').trim().toLowerCase();
+    if (!currentName)
+        return '';
+
+    const matches = entities.filter(entity =>
+        getEntityDomain(entity.entity_id) === requiredDomain &&
+        String(entity.attributes?.friendly_name ?? '').trim().toLowerCase() === currentName
+    );
+
+    return matches.length === 1 ? matches[0].entity_id : '';
+}
+
 // ─── EntitySearchPopover ──────────────────────────────────────────────────────
 
 const EntitySearchPopover = GObject.registerClass(
@@ -760,6 +797,51 @@ class ButtonsPage extends Adw.PreferencesPage {
         }
     }
 
+    _repairPanelEntity(entityKey, serviceKey, row) {
+        const entityId = this._settings.get_string(entityKey);
+        const requiredDomain = getEntityDomain(this._settings.get_string(serviceKey));
+        const nextEntityId = findReplacementEntityId(entityId, requiredDomain, this._entities);
+
+        if (nextEntityId === entityId)
+            return 0;
+
+        row.text = nextEntityId;
+        this._settings.set_string(entityKey, nextEntityId);
+        return 1;
+    }
+
+    _repairButtonConfigs() {
+        let repairs = 0;
+        this._configs = this._configs.map(config => {
+            const requiredDomain = String(config?.domain ?? '');
+            const entityId = String(config?.entity_id ?? '');
+            const nextEntityId = findReplacementEntityId(entityId, requiredDomain, this._entities);
+
+            if (nextEntityId === entityId)
+                return config;
+
+            repairs++;
+            return { ...config, entity_id: nextEntityId };
+        });
+
+        if (repairs > 0)
+            this._saveConfigs();
+
+        return repairs;
+    }
+
+    _repairLoadedConfigurations() {
+        let repairs = 0;
+        repairs += this._repairPanelEntity('color-entity', 'color-service', this._colorEntityRow);
+        repairs += this._repairPanelEntity('slider-entity', 'slider-service', this._sliderEntityRow);
+        repairs += this._repairButtonConfigs();
+
+        if (repairs > 0)
+            this._rebuildList();
+
+        return repairs;
+    }
+
     // ── Button list ──────────────────────────────────────────────────
 
     _rebuildList() {
@@ -833,7 +915,10 @@ class ButtonsPage extends Adw.PreferencesPage {
             ]);
             this._distributeEntities();
             this._distributeServices();
-            this._loadBtn.label = `✓ ${this._entities.length} entities, ${this._services.length} domains`;
+            const repairs = this._repairLoadedConfigurations();
+            this._loadBtn.label = repairs > 0
+                ? `✓ ${this._entities.length} entities, ${this._services.length} domains, repaired ${repairs}`
+                : `✓ ${this._entities.length} entities, ${this._services.length} domains`;
         } catch (e) {
             this._loadBtn.label = `Error: ${e.message}`;
             console.error('[RoomPanel] Load from HA failed:', e.message);

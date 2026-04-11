@@ -12,6 +12,10 @@ function _luma(hex) {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+function _entityMatchesDomain(entityId, domain) {
+    return !entityId || !domain || entityId.split('.')[0] === domain;
+}
+
 /**
  * A single configurable action button for the panel menu.
  *
@@ -48,6 +52,10 @@ class ActionButton extends St.Button {
         const { domain, service, entity_id, service_data = {} } = this._config;
         if (!domain || !service)
             return;
+        if (!_entityMatchesDomain(entity_id, domain)) {
+            console.error(`[RoomPanel] Ignoring invalid button config: entity "${entity_id}" does not match service domain "${domain}"`);
+            return;
+        }
 
         const data = entity_id
             ? { entity_id, ...service_data }

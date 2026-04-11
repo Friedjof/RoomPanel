@@ -6,6 +6,10 @@ import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import { ActionButton } from './actionButton.js';
 import { ColorWheel, rgbToHex } from './colorWheel.js';
 
+function entityMatchesDomain(entityId, domain) {
+    return Boolean(entityId) && Boolean(domain) && entityId.split('.')[0] === domain;
+}
+
 /**
  * The dropdown menu content:
  *  ─ Color section (circular color wheel)
@@ -203,6 +207,11 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             return;
 
         const [domain, svc] = service.split('.');
+        if (!entityMatchesDomain(entity, domain)) {
+            console.error(`[RoomPanel] Color call skipped: entity "${entity}" does not match service domain "${domain}"`);
+            return;
+        }
+
         try {
             await this._haClient.callService(domain, svc,
                 { entity_id: entity, [attribute]: rgb });
@@ -223,6 +232,11 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         const value = Math.round(min + this._slider.value * (max - min));
 
         const [domain, svc] = service.split('.');
+        if (!entityMatchesDomain(entity, domain)) {
+            console.error(`[RoomPanel] Slider call skipped: entity "${entity}" does not match service domain "${domain}"`);
+            return;
+        }
+
         try {
             await this._haClient.callService(domain, svc,
                 { entity_id: entity, [attribute]: value });
