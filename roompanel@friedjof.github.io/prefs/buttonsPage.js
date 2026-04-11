@@ -586,9 +586,11 @@ class ButtonListRow extends Adw.ActionRow {
 
         // Color dot
         if (config.color) {
-            const dot = new Gtk.Image({ icon_name: 'circle-filled-symbolic',
-                valign: Gtk.Align.CENTER });
-            dot.set_style(`color: ${config.color};`);
+            const dot = new Gtk.Label({
+                use_markup: true,
+                label: `<span foreground="${escapeMarkup(config.color)}">●</span>`,
+                valign: Gtk.Align.CENTER,
+            });
             this.add_prefix(dot);
         }
 
