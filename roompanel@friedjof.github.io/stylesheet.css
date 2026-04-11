@@ -1,10 +1,39 @@
 /* RoomPanel – custom styles */
 
+.roompanel-settings-item {
+  padding: 2px 8px 0 8px;
+}
+
+.roompanel-settings-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background-color: transparent;
+}
+
+.roompanel-settings-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.roompanel-settings-btn-inner {
+  spacing: 4px;
+}
+
+.roompanel-settings-icon {
+  icon-size: 12px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.roompanel-settings-domain {
+  font-size: 0.72em;
+  color: rgba(255, 255, 255, 0.38);
+}
+
 .roompanel-menu {
   width: 340px;
   min-width: 340px;
   max-width: 340px;
-  padding: 6px 6px 4px 6px;
+  padding: 0 6px 4px 6px;
 }
 
 .roompanel-color-info {
@@ -28,6 +57,19 @@
 .roompanel-color-value {
   font-family: monospace;
   color: rgba(255, 255, 255, 0.85);
+  cursor: text;
+}
+
+.roompanel-color-entry {
+  font-family: monospace;
+  width: 74px;
+  min-width: 74px;
+  max-width: 74px;
+  padding: 1px 4px;
+}
+
+.roompanel-color-entry-invalid {
+  color: #ff6b6b;
 }
 
 .roompanel-entity-label {

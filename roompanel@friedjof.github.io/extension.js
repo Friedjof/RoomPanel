@@ -30,7 +30,9 @@ export default class RoomPanelExtension extends Extension {
     }
 
     _createIndicator() {
-        this._indicator = new RoomPanelIndicator(this._settings, this._haClient);
+        this._indicator = new RoomPanelIndicator(
+            this._settings, this._haClient, () => this.openPreferences()
+        );
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 

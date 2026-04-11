@@ -36,11 +36,12 @@ function buildColorPreviewStyle(hex) {
  *  ─ Action buttons
  */
 export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
-    constructor(settings, haClient) {
+    constructor(settings, haClient, openPrefs) {
         super();
 
         this._settings = settings;
         this._haClient = haClient;
+        this._openPrefs = openPrefs ?? null;
         this._sliderSourceId = null;
         this._colorSourceId = null;
         this._copyResetSourceId = null;
@@ -57,6 +58,38 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     }
 
     _buildUI() {
+        // ── Settings row ──────────────────────────────────────────────
+        this._settingsItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+        this._settingsItem.add_style_class_name('roompanel-settings-item');
+        this.addMenuItem(this._settingsItem);
+
+        const settingsBtn = new St.Button({
+            style_class: 'roompanel-settings-btn',
+            can_focus: true,
+            reactive: true,
+        });
+        settingsBtn.connect('clicked', () => this._openPrefs?.());
+
+        const settingsBtnInner = new St.BoxLayout({
+            vertical: false,
+            style_class: 'roompanel-settings-btn-inner',
+        });
+        settingsBtn.set_child(settingsBtnInner);
+
+        settingsBtnInner.add_child(new St.Icon({
+            icon_name: 'preferences-system-symbolic',
+            style_class: 'roompanel-settings-icon',
+        }));
+
+        this._domainLabel = new St.Label({
+            style_class: 'roompanel-settings-domain',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        settingsBtnInner.add_child(this._domainLabel);
+
+        this._settingsItem.add_child(settingsBtn);
+        this._updateDomainLabel();
+
         // ── Color Section ──────────────────────────────────────────────
         this._colorItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
         this.addMenuItem(this._colorItem);
@@ -116,8 +149,38 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             text: '#ffffff',
             style_class: 'roompanel-color-value',
             y_align: Clutter.ActorAlign.CENTER,
+            reactive: true,
+            can_focus: true,
         });
+        this._colorValue.connect('button-press-event', () => this._startColorEdit());
         currentColorBox.add_child(this._colorValue);
+
+        this._colorEntry = new St.Entry({
+            style_class: 'roompanel-color-entry',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+            can_focus: true,
+        });
+        this._colorEntry.get_clutter_text().connect('activate', () => this._commitColorEdit());
+        this._colorEntry.get_clutter_text().connect('key-press-event', (_a, event) => {
+            if (event.get_key_symbol() === Clutter.KEY_Escape) {
+                this._cancelColorEdit();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+        this._colorEntry.get_clutter_text().connect('text-changed', () => {
+            const valid = !!this._parseHex(this._colorEntry.get_text());
+            if (valid)
+                this._colorEntry.remove_style_class_name('roompanel-color-entry-invalid');
+            else
+                this._colorEntry.add_style_class_name('roompanel-color-entry-invalid');
+        });
+        this._colorEntry.get_clutter_text().connect('key-focus-out', () => {
+            if (this._colorEntry.visible)
+                this._cancelColorEdit();
+        });
+        currentColorBox.add_child(this._colorEntry);
 
         this._copyButtonIcon = new St.Icon({
             icon_name: 'edit-copy-symbolic',
@@ -235,6 +298,9 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
             if (key === 'slider-entity')
                 this._updateSliderLabel();
+
+            if (key === 'ha-url')
+                this._updateDomainLabel();
         });
 
         this._syncSectionVisibility();
@@ -394,6 +460,12 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._colorPreview.set_style(buildColorPreviewStyle(hex));
     }
 
+    _updateDomainLabel() {
+        const url = this._settings.get_string('ha-url').trim();
+        const m = url.match(/^https?:\/\/([^/:?#\s]+)/i);
+        this._domainLabel.text = m ? m[1] : '—';
+    }
+
     _updateColorEntityLabel() {
         this._colorEntityLabel.text = formatEntityLabel(this._settings.get_string('color-entity'));
     }
@@ -419,6 +491,51 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             this._copyResetSourceId = null;
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    // ── Hex editor ──────────────────────────────────────────────────────────
+
+    /** Parse a user-typed hex string (with or without #, 3 or 6 digits). */
+    _parseHex(input) {
+        const raw = String(input ?? '').trim().replace(/^#/, '');
+        let hex6;
+        if (/^[0-9a-fA-F]{3}$/.test(raw))
+            hex6 = raw.split('').map(c => c + c).join('');
+        else if (/^[0-9a-fA-F]{6}$/.test(raw))
+            hex6 = raw;
+        else
+            return null;
+        return `#${hex6.toLowerCase()}`;
+    }
+
+    _startColorEdit() {
+        this._colorValue.visible = false;
+        this._colorEntry.set_text(this._colorValue.text);
+        this._colorEntry.remove_style_class_name('roompanel-color-entry-invalid');
+        this._colorEntry.visible = true;
+        this._colorEntry.grab_key_focus();
+        this._colorEntry.get_clutter_text().set_selection(0, -1);
+    }
+
+    _commitColorEdit() {
+        const hex = this._parseHex(this._colorEntry.get_text());
+        if (!hex) {
+            this._colorEntry.add_style_class_name('roompanel-color-entry-invalid');
+            return; // stay open so user can fix the input
+        }
+        this._colorEntry.visible = false;
+        this._colorValue.visible = true;
+        const rgb = hexToRgb(hex);
+        this._colorWheel.setColor(rgb);
+        this._updateColorPreview(rgb);
+        this._rememberColor(rgb);
+        void this._sendColor(rgb);
+    }
+
+    _cancelColorEdit() {
+        if (!this._colorEntry.visible) return;
+        this._colorEntry.visible = false;
+        this._colorValue.visible = true;
     }
 
     _rebuildColorHistory() {

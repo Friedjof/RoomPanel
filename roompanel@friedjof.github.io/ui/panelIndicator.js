@@ -10,7 +10,7 @@ import { RoomPanelMenu } from './panelMenu.js';
  */
 export const RoomPanelIndicator = GObject.registerClass(
     class RoomPanelIndicator extends PanelMenu.Button {
-        _init(settings, haClient) {
+        _init(settings, haClient, openPrefs) {
             super._init(0.0, 'RoomPanel');
 
             this._settings = settings;
@@ -25,7 +25,7 @@ export const RoomPanelIndicator = GObject.registerClass(
             this.add_child(icon);
 
             // Build the dropdown content
-            this._roomMenu = new RoomPanelMenu(settings, haClient);
+            this._roomMenu = new RoomPanelMenu(settings, haClient, openPrefs);
             this.menu.addMenuItem(this._roomMenu);
         }
 
