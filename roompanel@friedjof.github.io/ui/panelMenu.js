@@ -56,6 +56,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._sliderSourceId = null;
         this._sliderSyncSourceId = null;
         this._colorSourceId = null;
+        this._colorSyncSourceId = null;
         this._copyResetSourceId = null;
         this._colorHistory = loadColorHistory();
 
@@ -65,6 +66,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._suppressLiveUntil = 0;
         this._entityNames = {}; // entityId → friendly_name cache
         this._sliderValues = {}; // entityId → current numeric slider attribute value
+        this._colorValues = {}; // entityId → current rgb hex value
+        this._currentColorHex = '#ffffff';
 
         this._buildUI();
         this._connectSettings();
@@ -325,6 +328,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             if (key === 'color-entities' || key === 'color-selected') {
                 this._updateColorEntityLabel();
                 this._rebuildChips();
+                this._syncColorFromSelectedTargets();
             }
 
             if (key === 'slider-entities-config' || key === 'slider-selected') {
@@ -340,7 +344,9 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._syncSectionVisibility();
         this._updateColorEntityLabel();
         this._updateSliderLabel();
+        this._rebuildChips();
         this._rebuildSliderChips();
+        this._syncColorFromSelectedTargets();
         this._syncSliderFromSelectedTargets();
     }
 
@@ -360,7 +366,6 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         let colorChipsNeedRebuild = false;
         let sliderChipsNeedRebuild = false;
 
-        const colorLive = this._getLiveSyncEntity();
         for (const entityId of this._settings.get_strv('color-entities').filter(Boolean)) {
             try {
                 const state = await this._haClient.getState(entityId);
@@ -369,8 +374,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
                     this._entityNames[entityId] = name;
                     colorChipsNeedRebuild = true;
                 }
-                if (entityId === colorLive)
-                    this._applyColorState(state);
+                this._updateColorValue(entityId, state);
             } catch { /* no connection yet */ }
         }
 
@@ -389,6 +393,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
         if (colorChipsNeedRebuild) { this._rebuildChips(); this._updateColorEntityLabel(); }
         if (sliderChipsNeedRebuild) { this._rebuildSliderChips(); this._updateSliderLabel(); }
+        this._syncColorFromSelectedTargets();
         this._syncSliderFromSelectedTargets();
     }
 
@@ -400,12 +405,15 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     _onLiveStateChanged({ entity_id, new_state }) {
         if (!new_state) return;
 
+        const colorEntities = this._settings.get_strv('color-entities').filter(Boolean);
+        const isColorEntity = colorEntities.includes(entity_id);
+        const sliderCfg = this._getSliderConfigs().find(c => c.entity_id === entity_id);
+
         // Cache friendly name; update chips/labels if it changed
         const friendlyName = new_state?.attributes?.friendly_name;
         if (friendlyName && this._entityNames[entity_id] !== friendlyName) {
             this._entityNames[entity_id] = friendlyName;
-            const colorAll = this._settings.get_strv('color-entities').filter(Boolean);
-            if (colorAll.includes(entity_id)) {
+            if (isColorEntity) {
                 this._rebuildChips();
                 this._updateColorEntityLabel();
             }
@@ -416,21 +424,22 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             }
         }
 
-        const sliderCfg = this._getSliderConfigs().find(c => c.entity_id === entity_id);
+        if (isColorEntity)
+            this._updateColorValue(entity_id, new_state);
+
         if (sliderCfg && this._updateSliderValue(sliderCfg, new_state))
             this._rebuildSliderChips();
 
+        const suppressed = Date.now() < this._suppressLiveUntil;
+        if (isColorEntity && suppressed)
+            this._scheduleColorSyncAfterSuppression();
         if (sliderCfg && Date.now() < this._suppressLiveUntil) {
             this._scheduleSliderSyncAfterSuppression();
-            return;
         }
+        if (suppressed) return;
 
-        if (Date.now() < this._suppressLiveUntil) return;
-
-        // Color: only sync when exactly 1 entity is targeted
-        const colorLive = this._getLiveSyncEntity();
-        if (colorLive && entity_id === colorLive)
-            this._applyColorState(new_state);
+        if (isColorEntity)
+            this._syncColorFromSelectedTargets();
 
         if (sliderCfg)
             this._syncSliderFromSelectedTargets();
@@ -449,21 +458,119 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     /** Call before every user-initiated HA command to suppress echo-updates. */
     _markUserCommand() {
         this._suppressLiveUntil = Date.now() + 2000;
+        if (this._colorSyncSourceId) {
+            GLib.source_remove(this._colorSyncSourceId);
+            this._colorSyncSourceId = null;
+        }
         if (this._sliderSyncSourceId) {
             GLib.source_remove(this._sliderSyncSourceId);
             this._sliderSyncSourceId = null;
         }
     }
 
-    /**
-     * Returns the single entity to use for live-sync updates, or null when
-     * multiple entities are targeted (ambiguous which color to show in wheel).
-     */
-    _getLiveSyncEntity() {
+    _getTargetColorEntities() {
         const all = this._settings.get_strv('color-entities').filter(Boolean);
         const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
-        const targets = selected.length > 0 ? selected : all;
-        return targets.length === 1 ? targets[0] : null;
+        return selected.length > 0 ? selected : all;
+    }
+
+    _getColorHexFromState(state) {
+        const rgb = state?.attributes?.rgb_color;
+        if (!Array.isArray(rgb) || rgb.length < 3)
+            return null;
+
+        const clamped = rgb
+            .slice(0, 3)
+            .map(v => Math.max(0, Math.min(255, Math.round(Number(v) || 0))));
+        return rgbToHex(clamped);
+    }
+
+    _updateColorValue(entityId, state) {
+        if (!entityId)
+            return false;
+
+        const nextHex = this._getColorHexFromState(state);
+        const prevHex = this._colorValues[entityId];
+
+        if (!nextHex) {
+            if (prevHex === undefined)
+                return false;
+            delete this._colorValues[entityId];
+            return true;
+        }
+
+        if (prevHex === nextHex)
+            return false;
+
+        this._colorValues[entityId] = nextHex;
+        return true;
+    }
+
+    _getSharedColorHexForTargets(targets) {
+        if (targets.length === 0)
+            return null;
+
+        const colors = [];
+        for (const entityId of targets) {
+            const hex = this._colorValues[entityId];
+            if (!hex)
+                return null;
+            colors.push(hex);
+        }
+
+        const first = colors[0];
+        if (!colors.every(hex => hex === first))
+            return null;
+
+        return first;
+    }
+
+    _getSharedSelectedColorHex() {
+        return this._getSharedColorHexForTargets(this._getTargetColorEntities());
+    }
+
+    _syncColorFromSelectedTargets() {
+        const sharedHex = this._getSharedSelectedColorHex();
+        if (!sharedHex)
+            return;
+
+        const rgb = hexToRgb(sharedHex);
+        if (!rgb)
+            return;
+        this._colorWheel.setColor(rgb);
+        this._updateColorPreview(rgb);
+    }
+
+    _scheduleColorSyncAfterSuppression() {
+        const remaining = Math.max(0, this._suppressLiveUntil - Date.now());
+
+        if (this._colorSyncSourceId) {
+            GLib.source_remove(this._colorSyncSourceId);
+            this._colorSyncSourceId = null;
+        }
+
+        if (remaining <= 0) {
+            this._syncColorFromSelectedTargets();
+            return;
+        }
+
+        this._colorSyncSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, remaining + 25, () => {
+            this._colorSyncSourceId = null;
+            this._syncColorFromSelectedTargets();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _refreshColorChipStyles() {
+        const targets = new Set(this._getTargetColorEntities());
+        const sharedHex = this._getSharedSelectedColorHex();
+        for (const chip of this._chipRow.get_children()) {
+            const entityId = chip._entityId;
+            if (!entityId) continue;
+            chip.set_style(targets.has(entityId)
+                ? (sharedHex ? `border-color: ${sharedHex}; border-width: 2px;` : '')
+                : '');
+        }
     }
 
     /** Rebuild the chip selector row from current color-entities / color-selected. */
@@ -486,6 +593,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
                 reactive: true,
                 x_expand: true,
             });
+            chip._entityId = entityId;
             const chipLabel = new St.Label({
                 text: this._entityNames[entityId] ?? formatEntityLabel(entityId),
                 y_align: Clutter.ActorAlign.CENTER,
@@ -495,6 +603,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             chip.connect('clicked', () => this._toggleChip(entityId));
             this._chipRow.add_child(chip);
         }
+
+        this._refreshColorChipStyles();
     }
 
     /** Toggle an entity in/out of color-selected. */
@@ -734,8 +844,10 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
     _updateColorPreview(rgb) {
         const hex = rgbToHex(rgb);
+        this._currentColorHex = hex;
         this._colorValue.text = hex;
         this._colorPreview.set_style(buildColorPreviewStyle(hex));
+        this._refreshColorChipStyles();
     }
 
     _updateDomainLabel() {
@@ -745,9 +857,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     }
 
     _updateColorEntityLabel() {
-        const all = this._settings.get_strv('color-entities').filter(Boolean);
-        const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
-        const targets = selected.length > 0 ? selected : all;
+        const targets = this._getTargetColorEntities();
 
         if (targets.length === 0)
             this._colorEntityLabel.text = 'No entity selected';
@@ -926,9 +1036,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     }
 
     async _sendColor(rgb) {
-        const all = this._settings.get_strv('color-entities').filter(Boolean);
-        const selected = this._settings.get_strv('color-selected').filter(e => all.includes(e));
-        const targets = selected.length > 0 ? selected : all;
+        const targets = this._getTargetColorEntities();
         const service = this._settings.get_string('color-service');
         const attribute = this._settings.get_string('color-attribute');
         if (targets.length === 0 || !service) return;
@@ -942,10 +1050,18 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             return;
         }
 
+        const hex = rgbToHex(rgb);
+        for (const entityId of validTargets)
+            this._colorValues[entityId] = hex;
+        this._refreshColorChipStyles();
+
         try {
-            // HA accepts entity_id as array — single request for all targets
-            await this._haClient.callService(domain, svc,
-                { entity_id: validTargets.length === 1 ? validTargets[0] : validTargets, [attribute]: rgb });
+            for (const entityId of validTargets) {
+                await this._haClient.callService(domain, svc, {
+                    entity_id: entityId,
+                    [attribute]: rgb,
+                });
+            }
         } catch (e) {
             console.error('[RoomPanel] Color call failed:', e.message);
         }
@@ -998,6 +1114,10 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         if (this._sliderSyncSourceId) {
             GLib.source_remove(this._sliderSyncSourceId);
             this._sliderSyncSourceId = null;
+        }
+        if (this._colorSyncSourceId) {
+            GLib.source_remove(this._colorSyncSourceId);
+            this._colorSyncSourceId = null;
         }
         if (this._colorSourceId) {
             GLib.source_remove(this._colorSourceId);
