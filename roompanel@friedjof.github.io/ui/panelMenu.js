@@ -29,6 +29,14 @@ function buildColorPreviewStyle(hex) {
     return `background-color: ${hex}; width: 26px; height: 26px; min-width: 26px; min-height: 26px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.3);`;
 }
 
+function darkenHex(hex, factor = 0.55) {
+    const rgb = hexToRgb(hex);
+    if (!rgb)
+        return null;
+
+    return rgbToHex(rgb.map(v => Math.max(0, Math.min(255, Math.round(v * factor)))));
+}
+
 function formatSliderValue(value) {
     if (!Number.isFinite(value))
         return '—';
@@ -424,8 +432,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             }
         }
 
-        if (isColorEntity)
-            this._updateColorValue(entity_id, new_state);
+        if (isColorEntity && this._updateColorValue(entity_id, new_state))
+            this._refreshColorChipStyles();
 
         if (sliderCfg && this._updateSliderValue(sliderCfg, new_state))
             this._rebuildSliderChips();
@@ -563,13 +571,19 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
     _refreshColorChipStyles() {
         const targets = new Set(this._getTargetColorEntities());
-        const sharedHex = this._getSharedSelectedColorHex();
         for (const chip of this._chipRow.get_children()) {
             const entityId = chip._entityId;
             if (!entityId) continue;
-            chip.set_style(targets.has(entityId)
-                ? (sharedHex ? `border-color: ${sharedHex}; border-width: 2px;` : '')
-                : '');
+            const entityHex = this._colorValues[entityId];
+            const inactiveHex = entityHex ? darkenHex(entityHex) : null;
+
+            if (targets.has(entityId) && entityHex) {
+                chip.set_style(`border-color: ${entityHex}; border-width: 2px;`);
+            } else if (!targets.has(entityId) && inactiveHex) {
+                chip.set_style(`border-color: ${inactiveHex}; border-width: 2px;`);
+            } else {
+                chip.set_style('');
+            }
         }
     }
 
