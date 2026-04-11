@@ -4,6 +4,7 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 import GObject from 'gi://GObject';
 import { HaClient } from '../lib/haClient.js';
+import { haDataStore } from './haDataStore.js';
 
 export const ConnectionPage = GObject.registerClass(
     class ConnectionPage extends Adw.PreferencesPage {
@@ -15,6 +16,7 @@ export const ConnectionPage = GObject.registerClass(
             });
 
             this._settings = settings;
+            this._haDataChangedId = haDataStore.connect('changed', () => this._updateLoadUI());
 
             // ── Group: Home Assistant ───────────────────────────────────
             const group = new Adw.PreferencesGroup({
@@ -83,6 +85,33 @@ export const ConnectionPage = GObject.registerClass(
             });
             testBox.append(this._copyButton);
 
+            // ── Entity / service loading ───────────────────────────────
+            const dataGroup = new Adw.PreferencesGroup({
+                title: 'Home Assistant Data',
+                description: 'Refreshes automatically whenever you open this tab. Actions and Sensors use this cached data for entity search.',
+            });
+            this.add(dataGroup);
+
+            this._loadStatusRow = new Adw.ActionRow({
+                title: 'Loaded Data',
+                subtitle: haDataStore.getStatus(),
+                activatable: false,
+            });
+            dataGroup.add(this._loadStatusRow);
+
+            const loadRow = new Adw.ActionRow({
+                title: 'Refresh Home Assistant Data',
+                subtitle: 'Reload entities and services from your Home Assistant instance',
+            });
+            dataGroup.add(loadRow);
+
+            this._loadButton = new Gtk.Button({
+                label: 'Refresh',
+                css_classes: ['suggested-action'],
+                valign: Gtk.Align.CENTER,
+            });
+            loadRow.add_suffix(this._loadButton);
+
             // ── Save on change ─────────────────────────────────────────
             this._urlRow.connect('changed', () =>
                 settings.set_string('ha-url', this._urlRow.text));
@@ -93,6 +122,14 @@ export const ConnectionPage = GObject.registerClass(
 
             this._testButton.connect('clicked', () => this._testConnection());
             this._copyButton.connect('clicked', () => this._copyError());
+            this._loadButton.connect('clicked', () => void this.refreshHAData());
+            this.connect('map', () => void this.refreshHAData());
+            this.connect('notify::child-visible', () => {
+                if (this.get_child_visible())
+                    void this.refreshHAData();
+            });
+
+            this._updateLoadUI();
         }
 
         async _testConnection() {
@@ -135,6 +172,25 @@ export const ConnectionPage = GObject.registerClass(
                 this._copyButton.icon_name = 'edit-copy-symbolic';
                 return GLib.SOURCE_REMOVE;
             });
+        }
+
+        refreshHAData() {
+            return haDataStore.refresh(this._settings);
+        }
+
+        _updateLoadUI() {
+            this._loadStatusRow.subtitle = haDataStore.getStatus();
+            this._loadButton.sensitive = !haDataStore.isLoading();
+            this._loadButton.label = haDataStore.isLoading() ? 'Refreshing…' : 'Refresh';
+        }
+
+        vfunc_unroot() {
+            if (this._haDataChangedId) {
+                haDataStore.disconnect(this._haDataChangedId);
+                this._haDataChangedId = null;
+            }
+
+            super.vfunc_unroot();
         }
     }
 );
