@@ -1,6 +1,7 @@
 import St from 'gi://St';
 import GObject from 'gi://GObject';
 import Clutter from 'gi://Clutter';
+import Pango from 'gi://Pango';
 
 /** Relative luminance of a hex color (0 = black, 1 = white). */
 function _luma(hex) {
@@ -14,6 +15,17 @@ function _luma(hex) {
 
 function _entityMatchesDomain(entityId, domain) {
     return !entityId || !domain || entityId.split('.')[0] === domain;
+}
+
+function _hexToRgba(hex, alpha) {
+    const m = hex.match(/^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
+    if (!m)
+        return null;
+
+    const r = parseInt(m[1], 16);
+    const g = parseInt(m[2], 16);
+    const b = parseInt(m[3], 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /** "light.wohnzimmer_tisch" → "wohnzimmer tisch" */
@@ -36,8 +48,8 @@ function _formatService(service) {
  *
  * Layout:
  *   ┌─────────────────────────────┐
- *   │   🔆  Toggle Licht          │  ← main label
- *   │  wohnzimmer tisch  toggle   │  ← meta: entity (left) · service (right)
+ *   │  🔆  Toggle Licht           │
+ *   │      wohnzimmer · turn on   │
  *   └─────────────────────────────┘
  */
 export const ActionButton = GObject.registerClass(
@@ -54,45 +66,95 @@ class ActionButton extends St.Button {
         this._haClient = haClient;
 
         // ── Inner layout ──────────────────────────────────────────────
-        const box = new St.BoxLayout({
+        const shell = new St.BoxLayout({
+            vertical: false,
+            x_expand: true,
+            y_expand: true,
+            style_class: 'roompanel-action-button-shell',
+        });
+
+        this._iconRail = new St.Bin({
+            style_class: 'roompanel-action-button-rail',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._iconLabel = new St.Label({
+            text: config.icon ?? '•',
+            style_class: 'roompanel-action-button-icon',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._iconRail.set_child(this._iconLabel);
+        shell.add_child(this._iconRail);
+
+        const content = new St.BoxLayout({
             vertical: true,
             x_expand: true,
-            y_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
             style_class: 'roompanel-action-button-box',
         });
+        shell.add_child(content);
 
-        // Main label — St.Bin fills remaining height and centers the text
-        const mainText = `${config.icon ?? ''} ${config.label ?? ''}`.trim();
-        const mainLabel = new St.Label({
-            text: mainText,
+        const titleText = config.label?.trim() || _formatService(config.service) || 'Action';
+        this._titleLabel = new St.Label({
+            text: titleText,
             style_class: 'roompanel-action-button-label',
-            x_align: Clutter.ActorAlign.CENTER,
-        });
-        box.add_child(new St.Bin({
-            child: mainLabel,
+            x_align: Clutter.ActorAlign.START,
             x_expand: true,
-            y_expand: true,
-            x_align: Clutter.ActorAlign.FILL,
+        });
+        this._titleLabel.clutter_text.line_wrap = false;
+        this._titleLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        content.add_child(this._titleLabel);
+
+        const metaRow = new St.BoxLayout({
+            vertical: false,
+            x_expand: true,
+            style_class: 'roompanel-action-button-meta-row',
+        });
+        content.add_child(metaRow);
+
+        this._entityLabel = new St.Label({
+            text: _formatEntity(config.entity_id),
+            style_class: 'roompanel-action-button-meta roompanel-action-button-meta-entity',
+            x_expand: true,
+            x_align: Clutter.ActorAlign.START,
+        });
+        this._entityLabel.clutter_text.line_wrap = false;
+        this._entityLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        metaRow.add_child(this._entityLabel);
+
+        const separator = new St.Label({
+            text: '·',
+            style_class: 'roompanel-action-button-meta roompanel-action-button-meta-separator',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        metaRow.add_child(separator);
+
+        this._serviceLabel = new St.Label({
+            text: _formatService(config.service),
+            style_class: 'roompanel-action-button-meta roompanel-action-button-meta-service',
+            x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.CENTER,
         }));
+        this._serviceLabel.clutter_text.line_wrap = false;
+        metaRow.add_child(this._serviceLabel);
 
-        // Meta line: "entity name – action", right-aligned
-        const metaText = [_formatEntity(config.entity_id), _formatService(config.service)]
-            .filter(Boolean)
-            .join(' – ');
-        box.add_child(new St.Label({
-            text: metaText,
-            style_class: 'roompanel-action-button-meta',
-            x_align: Clutter.ActorAlign.END,
-            x_expand: true,
-        }));
+        if (!this._entityLabel.text)
+            separator.visible = false;
+        if (!this._serviceLabel.text) {
+            separator.visible = false;
+            this._serviceLabel.visible = false;
+        }
 
-        this.set_child(box);
+        this.set_child(shell);
 
         // ── Custom color ──────────────────────────────────────────────
         if (config.color) {
             const fg = _luma(config.color) > 0.5 ? '#000000' : '#ffffff';
-            this.set_style(`background-color: ${config.color}; color: ${fg};`);
+            const border = _hexToRgba(config.color, 0.55);
+            const fill = _hexToRgba(config.color, 0.12);
+            this.set_style(`background-color: ${fill}; border-color: ${border};`);
+            this._iconRail.set_style(`background-color: ${config.color}; color: ${fg};`);
         }
 
         this.connect('clicked', () => this._onClicked());
