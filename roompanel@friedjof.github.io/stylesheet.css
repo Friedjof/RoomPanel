@@ -192,6 +192,14 @@
   font-size: 0.8em;
 }
 
+.roompanel-chip-content {
+  spacing: 5px;
+}
+
+.roompanel-chip-value {
+  color: rgba(255, 255, 255, 0.62);
+}
+
 .roompanel-chip:hover {
   background-color: rgba(255, 255, 255, 0.12);
 }

@@ -29,6 +29,17 @@ function buildColorPreviewStyle(hex) {
     return `background-color: ${hex}; width: 26px; height: 26px; min-width: 26px; min-height: 26px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.3);`;
 }
 
+function formatSliderValue(value) {
+    if (!Number.isFinite(value))
+        return '—';
+
+    const rounded = Math.round(value * 10) / 10;
+    if (Math.abs(rounded - Math.round(rounded)) < 0.001)
+        return String(Math.round(rounded));
+
+    return String(rounded);
+}
+
 /**
  * The dropdown menu content:
  *  ─ Color section (circular color wheel)
@@ -52,6 +63,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         // not jump back to the "old" value that HA briefly echoes.
         this._suppressLiveUntil = 0;
         this._entityNames = {}; // entityId → friendly_name cache
+        this._sliderValues = {}; // entityId → current numeric slider attribute value
 
         this._buildUI();
         this._connectSettings();
@@ -317,6 +329,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             if (key === 'slider-entities-config' || key === 'slider-selected') {
                 this._updateSliderLabel();
                 this._rebuildSliderChips();
+                this._syncSliderFromSelectedTargets();
             }
 
             if (key === 'ha-url')
@@ -327,6 +340,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._updateColorEntityLabel();
         this._updateSliderLabel();
         this._rebuildSliderChips();
+        this._syncSliderFromSelectedTargets();
     }
 
     // ── Live sync ────────────────────────────────────────────────────────────
@@ -359,7 +373,6 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             } catch { /* no connection yet */ }
         }
 
-        const sliderLiveCfg = this._getLiveSyncSliderConfig();
         for (const cfg of this._getSliderConfigs().filter(c => c.entity_id)) {
             try {
                 const state = await this._haClient.getState(cfg.entity_id);
@@ -368,18 +381,20 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
                     this._entityNames[cfg.entity_id] = name;
                     sliderChipsNeedRebuild = true;
                 }
-                if (sliderLiveCfg && cfg.entity_id === sliderLiveCfg.entity_id)
-                    this._applySliderState(state, sliderLiveCfg);
+                if (this._updateSliderValue(cfg, state))
+                    sliderChipsNeedRebuild = true;
             } catch { /* no connection yet */ }
         }
 
         if (colorChipsNeedRebuild) { this._rebuildChips(); this._updateColorEntityLabel(); }
         if (sliderChipsNeedRebuild) { this._rebuildSliderChips(); this._updateSliderLabel(); }
+        this._syncSliderFromSelectedTargets();
     }
 
     /**
      * Incoming state_changed event from HA.
-     * Ignored for a short window after the user interacted (echo suppression).
+     * Chip values keep updating immediately; only the shared slider/wheel UI
+     * is gated by the short echo-suppression window after local interaction.
      */
     _onLiveStateChanged({ entity_id, new_state }) {
         if (!new_state) return;
@@ -400,6 +415,10 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             }
         }
 
+        const sliderCfg = this._getSliderConfigs().find(c => c.entity_id === entity_id);
+        if (sliderCfg && this._updateSliderValue(sliderCfg, new_state))
+            this._rebuildSliderChips();
+
         if (Date.now() < this._suppressLiveUntil) return;
 
         // Color: only sync when exactly 1 entity is targeted
@@ -407,10 +426,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         if (colorLive && entity_id === colorLive)
             this._applyColorState(new_state);
 
-        // Slider: only sync when exactly 1 entity is targeted
-        const sliderLiveCfg = this._getLiveSyncSliderConfig();
-        if (sliderLiveCfg && entity_id === sliderLiveCfg.entity_id)
-            this._applySliderState(new_state, sliderLiveCfg);
+        if (sliderCfg)
+            this._syncSliderFromSelectedTargets();
     }
 
     /** Push a fresh HA color state into the wheel + preview. */
@@ -421,18 +438,6 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         const clamped = rgb.map(v => Math.max(0, Math.min(255, Math.round(v))));
         this._colorWheel.setColor(clamped);
         this._updateColorPreview(clamped);
-    }
-
-    /** Push a fresh HA slider state into the Slider widget using the entity's config. */
-    _applySliderState(state, cfg) {
-        if (!cfg?.attribute || !state?.attributes) return;
-        const raw = state.attributes[cfg.attribute];
-        if (raw === undefined || raw === null) return;
-        const min = Number(cfg.min ?? 0);
-        const max = Number(cfg.max ?? 255);
-        if (max <= min) return;
-        // Setter never emits value-changed, so no feedback loop possible
-        this._slider.value = Math.max(0, Math.min(1, (Number(raw) - min) / (max - min)));
     }
 
     /** Call before every user-initiated HA command to suppress echo-updates. */
@@ -521,10 +526,65 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         return selected.length > 0 ? all.filter(c => selected.includes(c.entity_id)) : all;
     }
 
-    /** Config of the single entity to use for live-sync, or null when ambiguous. */
-    _getLiveSyncSliderConfig() {
+    _getSliderNumericValue(cfg, state) {
+        if (!cfg?.attribute || !state?.attributes)
+            return null;
+
+        const raw = state.attributes[cfg.attribute];
+        if (raw === undefined || raw === null)
+            return null;
+
+        const numeric = Number(raw);
+        return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    _updateSliderValue(cfg, state) {
+        if (!cfg?.entity_id)
+            return false;
+
+        const nextValue = this._getSliderNumericValue(cfg, state);
+        const prevValue = this._sliderValues[cfg.entity_id];
+
+        if (nextValue === null) {
+            if (prevValue === undefined)
+                return false;
+            delete this._sliderValues[cfg.entity_id];
+            return true;
+        }
+
+        if (prevValue === nextValue)
+            return false;
+
+        this._sliderValues[cfg.entity_id] = nextValue;
+        return true;
+    }
+
+    _getSliderChipValueText(entityId) {
+        return formatSliderValue(this._sliderValues[entityId]);
+    }
+
+    _syncSliderFromSelectedTargets() {
         const targets = this._getTargetSliderConfigs();
-        return targets.length === 1 ? targets[0] : null;
+        if (targets.length === 0)
+            return;
+
+        const states = [];
+        for (const cfg of targets) {
+            const raw = this._sliderValues[cfg.entity_id];
+            const min = Number(cfg.min ?? 0);
+            const max = Number(cfg.max ?? 255);
+            if (!Number.isFinite(raw) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min)
+                return;
+            states.push({ raw, min, max });
+        }
+
+        const first = states[0];
+        const sameRange = states.every(entry => entry.min === first.min && entry.max === first.max);
+        const sameValue = states.every(entry => entry.raw === first.raw);
+        if (!sameRange || !sameValue)
+            return;
+
+        this._slider.value = Math.max(0, Math.min(1, (first.raw - first.min) / (first.max - first.min)));
     }
 
     _rebuildSliderChips() {
@@ -548,11 +608,25 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
                 reactive: true,
                 x_expand: true,
             });
-            chip.set_child(new St.Label({
+            const chipContent = new St.BoxLayout({
+                vertical: false,
+                style_class: 'roompanel-chip-content',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            chipContent.add_child(new St.Label({
                 text: this._entityNames[entityId] ?? formatEntityLabel(entityId),
+                style_class: 'roompanel-chip-name',
                 y_align: Clutter.ActorAlign.CENTER,
                 x_align: Clutter.ActorAlign.CENTER,
             }));
+            chipContent.add_child(new St.Label({
+                text: this._getSliderChipValueText(entityId),
+                style_class: 'roompanel-chip-value',
+                y_align: Clutter.ActorAlign.CENTER,
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            chip.set_child(chipContent);
             chip.connect('clicked', () => this._toggleSliderChip(entityId));
             this._sliderChipRow.add_child(chip);
         }
