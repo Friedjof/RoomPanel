@@ -617,6 +617,8 @@ class ButtonsPage extends Adw.PreferencesPage {
         this._entities = [];
         this._services = [];
         this._configs = this._loadConfigs();
+        this._loadTask = null;
+        this._loadResetSourceId = null;
 
         // ── Home Assistant Sync ───────────────────────────────────────
         const haGroup = new Adw.PreferencesGroup({
@@ -625,19 +627,26 @@ class ButtonsPage extends Adw.PreferencesPage {
         });
         this.add(haGroup);
 
+        this._loadStatusRow = new Adw.ActionRow({
+            title: 'Loaded Data',
+            subtitle: 'Open this tab to sync entities and services',
+            activatable: false,
+        });
+        haGroup.add(this._loadStatusRow);
+
         const loadRow = new Adw.ActionRow({
-            title: 'Sync Entities and Services',
-            subtitle: 'Fetches live data from your Home Assistant instance',
+            title: 'Refresh Home Assistant Data',
+            subtitle: 'Reloads entities and services from your Home Assistant instance',
         });
         haGroup.add(loadRow);
 
         this._loadBtn = new Gtk.Button({
-            label: 'Load from Home Assistant',
+            label: 'Refresh',
             css_classes: ['suggested-action'],
             valign: Gtk.Align.CENTER,
         });
         loadRow.add_suffix(this._loadBtn);
-        this._loadBtn.connect('clicked', () => this._loadFromHA());
+        this._loadBtn.connect('clicked', () => this.refreshFromHA());
 
         // ── Color Picker Group ────────────────────────────────────────
         const colorGroup = new Adw.PreferencesGroup({
@@ -729,6 +738,7 @@ class ButtonsPage extends Adw.PreferencesPage {
         addBtn.connect('clicked', () => this._openEditDialog(null, null));
 
         this._rebuildList();
+        this.connect('map', () => void this.refreshFromHA());
     }
 
     // ── Helper: entity row with search lupe ──────────────────────────
@@ -897,14 +907,51 @@ class ButtonsPage extends Adw.PreferencesPage {
         this._settings.set_string('buttons-config', JSON.stringify(this._configs));
     }
 
+    _setLoadStatus(subtitle) {
+        this._loadStatusRow.subtitle = subtitle;
+    }
+
+    _getServiceCount() {
+        return getServiceEntries(this._services).length;
+    }
+
+    _clearLoadResetTimer() {
+        if (!this._loadResetSourceId)
+            return;
+
+        GLib.source_remove(this._loadResetSourceId);
+        this._loadResetSourceId = null;
+    }
+
+    refreshFromHA() {
+        if (this._loadTask)
+            return this._loadTask;
+
+        this._loadTask = this._loadFromHA()
+            .finally(() => {
+                this._loadTask = null;
+            });
+        return this._loadTask;
+    }
+
     async _loadFromHA() {
+        const url = this._settings.get_string('ha-url').trim();
+        const token = this._settings.get_string('ha-token').trim();
+
+        if (!url || !token) {
+            this._setLoadStatus('Connection missing. Configure URL and token on the Connection tab.');
+            return;
+        }
+
+        this._clearLoadResetTimer();
         this._loadBtn.sensitive = false;
-        this._loadBtn.label = 'Loading…';
+        this._loadBtn.label = 'Refreshing…';
+        this._setLoadStatus('Loading entities and services…');
 
         const client = new HaClient();
         client.setCredentials(
-            this._settings.get_string('ha-url'),
-            this._settings.get_string('ha-token'),
+            url,
+            token,
             this._settings.get_boolean('ha-verify-ssl')
         );
 
@@ -916,16 +963,18 @@ class ButtonsPage extends Adw.PreferencesPage {
             this._distributeEntities();
             this._distributeServices();
             const repairs = this._repairLoadedConfigurations();
-            this._loadBtn.label = repairs > 0
-                ? `✓ ${this._entities.length} entities, ${this._services.length} domains, repaired ${repairs}`
-                : `✓ ${this._entities.length} entities, ${this._services.length} domains`;
+            const serviceCount = this._getServiceCount();
+            this._setLoadStatus(repairs > 0
+                ? `${this._entities.length} entities, ${this._services.length} domains, ${serviceCount} services, repaired ${repairs}`
+                : `${this._entities.length} entities, ${this._services.length} domains, ${serviceCount} services`);
         } catch (e) {
-            this._loadBtn.label = `Error: ${e.message}`;
+            this._setLoadStatus(`Load failed: ${e.message}`);
             console.error('[RoomPanel] Load from HA failed:', e.message);
         } finally {
             this._loadBtn.sensitive = true;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 4000, () => {
-                this._loadBtn.label = 'Load from Home Assistant';
+            this._loadResetSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 4000, () => {
+                this._loadBtn.label = 'Refresh';
+                this._loadResetSourceId = null;
                 return GLib.SOURCE_REMOVE;
             });
             client.destroy();
