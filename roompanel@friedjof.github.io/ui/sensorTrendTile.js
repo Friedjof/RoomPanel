@@ -82,9 +82,40 @@ export class SensorTrendTile {
 
     getActor() { return this._actor; }
 
+    setHistorySamples(samples) {
+        if (!Array.isArray(samples) || samples.length === 0) {
+            this._samples = [];
+            this._sparkline.setSamples([]);
+            return;
+        }
+
+        const numeric = samples.filter(value => Number.isFinite(value));
+        if (numeric.length === 0) {
+            this._samples = [];
+            this._sparkline.setSamples([]);
+            return;
+        }
+
+        const step = Math.max(1, Math.ceil(numeric.length / MAX_SAMPLES));
+        const reduced = [];
+
+        for (let i = 0; i < numeric.length; i += step)
+            reduced.push(numeric[i]);
+
+        const last = numeric[numeric.length - 1];
+        if (reduced[reduced.length - 1] !== last)
+            reduced.push(last);
+
+        this._samples = reduced.slice(-MAX_SAMPLES);
+        this._sparkline.setSamples([...this._samples]);
+    }
+
     /** Push a new numeric sample into the sparkline buffer. */
     pushSample(value) {
         if (!Number.isFinite(value)) return;
+        const previous = this._samples[this._samples.length - 1];
+        if (previous === value)
+            return;
         this._samples.push(value);
         if (this._samples.length > MAX_SAMPLES)
             this._samples.shift();

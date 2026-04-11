@@ -4,6 +4,7 @@ import { SensorValueTile } from './sensorValueTile.js';
 import { SensorGaugeTile } from './sensorGaugeTile.js';
 import { SensorTrendTile } from './sensorTrendTile.js';
 import { readSensorWidgets } from '../lib/configAdapters.js';
+import { getNumericValue } from './sensorHelpers.js';
 
 /**
  * Read-only sensor section of the panel menu.
@@ -51,6 +52,10 @@ export class SensorSection {
                 }
             } catch { /* no connection yet */ }
         }
+
+        const trendConfigs = configs.filter(c => c.entity_id && c.widget_type === 'trend');
+        for (const cfg of trendConfigs)
+            await this._hydrateTrendHistory(cfg);
     }
 
     /** Called by panelMenu for every incoming state_changed WebSocket event. */
@@ -162,6 +167,27 @@ export class SensorSection {
         for (const { config, tile } of this._tiles) {
             if (config.entity_id === entityId)
                 tile.update(state);
+        }
+    }
+
+    async _hydrateTrendHistory(config) {
+        try {
+            const history = await this._haClient.getHistory(config.entity_id, 24);
+            const samples = history
+                .map(state => getNumericValue(config, state))
+                .filter(value => value !== null);
+
+            for (const { config: tileConfig, tile } of this._tiles) {
+                if (
+                    tileConfig.entity_id === config.entity_id &&
+                    tileConfig.widget_type === 'trend' &&
+                    typeof tile.setHistorySamples === 'function'
+                ) {
+                    tile.setHistorySamples(samples);
+                }
+            }
+        } catch {
+            /* history endpoint unavailable or entity missing */
         }
     }
 

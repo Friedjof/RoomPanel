@@ -88,6 +88,30 @@ export class HaClient {
         return this._sendAsync(this._buildMessage('GET', `/api/states/${entityId}`));
     }
 
+    /**
+     * Fetch state history for an entity during the last `hours` hours.
+     * Returns the entity history array as documented by HA's REST API.
+     */
+    async getHistory(entityId, hours = 24) {
+        if (!this._url || !this._token)
+            throw new Error('URL or token not configured');
+
+        const safeHours = Math.max(1, Number(hours) || 24);
+        const end = new Date();
+        const start = new Date(end.getTime() - safeHours * 60 * 60 * 1000);
+
+        const startIso = encodeURIComponent(start.toISOString());
+        const endIso = encodeURIComponent(end.toISOString());
+        const filter = encodeURIComponent(entityId);
+        const path = `/api/history/period/${startIso}?end_time=${endIso}&filter_entity_id=${filter}`;
+
+        const result = await this._sendAsync(this._buildMessage('GET', path));
+        if (!Array.isArray(result) || result.length === 0)
+            return [];
+
+        return Array.isArray(result[0]) ? result[0] : [];
+    }
+
     // ── WebSocket live-sync ─────────────────────────────────────────────────
 
     /**
