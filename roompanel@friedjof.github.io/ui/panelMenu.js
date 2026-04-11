@@ -2,9 +2,9 @@ import St from 'gi://St';
 import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import { ActionButton } from './actionButton.js';
 import { ColorWheel, rgbToHex } from './colorWheel.js';
+import { DimmerSlider } from './dimmerSlider.js';
 import { hexToRgb, loadColorHistory, pushColorToHistory, saveColorHistory } from '../lib/colorHistory.js';
 
 function entityMatchesDomain(entityId, domain) {
@@ -46,8 +46,14 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._copyResetSourceId = null;
         this._colorHistory = loadColorHistory();
 
+        // Feedback-loop protection: after the user sends a command we suppress
+        // incoming HA state updates for this many milliseconds so the UI does
+        // not jump back to the "old" value that HA briefly echoes.
+        this._suppressLiveUntil = 0;
+
         this._buildUI();
         this._connectSettings();
+        this._initLiveSync();
     }
 
     _buildUI() {
@@ -62,19 +68,20 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         colorBox.add_style_class_name('roompanel-menu');
         this._colorItem.add_child(colorBox);
 
-        const colorHeader = new St.BoxLayout({
+        // Top row: "Color" + entity name (left, expands) | preview + copy (right-aligned)
+        const colorTopRow = new St.BoxLayout({
             vertical: false,
-            style_class: 'roompanel-color-header',
             x_expand: true,
+            style_class: 'roompanel-color-header',
         });
-        colorBox.add_child(colorHeader);
+        colorBox.add_child(colorTopRow);
 
         const colorInfoBox = new St.BoxLayout({
             vertical: true,
             x_expand: true,
             style_class: 'roompanel-color-info',
         });
-        colorHeader.add_child(colorInfoBox);
+        colorTopRow.add_child(colorInfoBox);
 
         const colorLabel = new St.Label({
             text: 'Color',
@@ -89,12 +96,14 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         colorInfoBox.add_child(this._colorEntityLabel);
 
+        // Preview + hex + copy — right side of the header row
         const currentColorBox = new St.BoxLayout({
             vertical: false,
             style_class: 'roompanel-current-color',
+            x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        colorHeader.add_child(currentColorBox);
+        colorTopRow.add_child(currentColorBox);
 
         this._colorPreview = new St.Widget({
             style_class: 'roompanel-color-preview',
@@ -110,10 +119,6 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         currentColorBox.add_child(this._colorValue);
 
-        this._colorWheel = new ColorWheel();
-        this._colorWheel.connect('color-changed', () => this._queueColorChanged());
-        this._colorWheel.connect('color-selected', () => this._commitSelectedColor());
-
         this._copyButtonIcon = new St.Icon({
             icon_name: 'edit-copy-symbolic',
             style_class: 'popup-menu-icon',
@@ -127,19 +132,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._copyButton.connect('clicked', () => this._copyCurrentColor());
         currentColorBox.add_child(this._copyButton);
 
-        const historyHeader = new St.BoxLayout({
-            vertical: false,
-            style_class: 'roompanel-history-header',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this._historyLabel = new St.Label({
-            text: 'History',
-            style_class: 'roompanel-history-title',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        historyHeader.add_child(this._historyLabel);
-        colorHeader.add_child(historyHeader);
-
+        // Body row: color wheel (left) + right column with history (right, centered)
         const colorBody = new St.BoxLayout({
             vertical: false,
             x_expand: true,
@@ -147,24 +140,36 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         });
         colorBox.add_child(colorBody);
 
+        this._colorWheel = new ColorWheel();
+        this._colorWheel.connect('color-changed', () => this._queueColorChanged());
+        this._colorWheel.connect('color-selected', () => this._commitSelectedColor());
         colorBody.add_child(this._colorWheel);
+
+        const colorRightCol = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            style_class: 'roompanel-color-right',
+        });
+        colorBody.add_child(colorRightCol);
+
+        this._historyLabel = new St.Label({
+            text: 'History',
+            style_class: 'roompanel-history-title',
+        });
+        colorRightCol.add_child(this._historyLabel);
 
         this._historyBox = new St.BoxLayout({
             vertical: true,
             x_expand: true,
             style_class: 'roompanel-color-history',
         });
-        colorBody.add_child(this._historyBox);
+        colorRightCol.add_child(this._historyBox);
+
         this._updateColorPreview(this._colorWheel.getColor());
         this._updateColorEntityLabel();
         this._rebuildColorHistory();
 
-        // ── Separator ─────────────────────────────────────────────────
-        this._colorSeparator = new PopupMenu.PopupSeparatorMenuItem();
-        this._colorSeparator.add_style_class_name('roompanel-separator');
-        this.addMenuItem(this._colorSeparator);
-
-        // ── Slider Section ────────────────────────────────────────────
+        // ── Slider Section (no separator above — saves vertical space) ──
         this._sliderItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
         this.addMenuItem(this._sliderItem);
 
@@ -172,16 +177,17 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         sliderBox.add_style_class_name('roompanel-menu');
         this._sliderItem.add_child(sliderBox);
 
-        const sliderLabel = new St.Label({
+        this._sliderLabel = new St.Label({
             text: 'Value',
             style_class: 'roompanel-section-label',
         });
-        sliderBox.add_child(sliderLabel);
+        sliderBox.add_child(this._sliderLabel);
 
-        this._slider = new Slider.Slider(0.5);
+        this._slider = new DimmerSlider();
         sliderBox.add_child(this._slider);
 
-        this._slider.connect('notify::value', () => {
+        // value-changed only fires from user interaction (not from .value setter)
+        this._slider.connect('value-changed', () => {
             if (this._sliderSourceId) {
                 GLib.source_remove(this._sliderSourceId);
                 this._sliderSourceId = null;
@@ -218,26 +224,128 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             if (key === 'buttons-config' || key === 'button-count')
                 this._rebuildButtons();
 
-            if (key === 'color-entity' || key === 'slider-entity')
+            if (key === 'color-entity' || key === 'slider-entity') {
                 this._syncSectionVisibility();
+                // Re-hydrate initial state when entity assignment changes
+                this._hydrateInitialState();
+            }
 
             if (key === 'color-entity')
                 this._updateColorEntityLabel();
+
+            if (key === 'slider-entity')
+                this._updateSliderLabel();
         });
 
         this._syncSectionVisibility();
         this._updateColorEntityLabel();
+        this._updateSliderLabel();
+    }
+
+    // ── Live sync ────────────────────────────────────────────────────────────
+
+    _initLiveSync() {
+        this._haClient.connectLive(data => this._onLiveStateChanged(data));
+        // Hydrate slider + color wheel with current HA state on startup
+        this._hydrateInitialState();
+    }
+
+    /**
+     * Fetch the current HA state once and push it into the UI.
+     * Called on startup and whenever the watched entities change.
+     */
+    async _hydrateInitialState() {
+        const colorEntity = this._settings.get_string('color-entity').trim();
+        const sliderEntity = this._settings.get_string('slider-entity').trim();
+
+        if (colorEntity) {
+            try {
+                const state = await this._haClient.getState(colorEntity);
+                this._applyColorState(state);
+            } catch { /* entity not found or no connection yet */ }
+        }
+
+        if (sliderEntity) {
+            try {
+                const state = await this._haClient.getState(sliderEntity);
+                this._applySliderState(state);
+            } catch { /* entity not found or no connection yet */ }
+        }
+    }
+
+    /**
+     * Incoming state_changed event from HA.
+     * Ignored for a short window after the user interacted (echo suppression).
+     */
+    _onLiveStateChanged({ entity_id, new_state }) {
+        if (!new_state) return;
+
+        const colorEntity = this._settings.get_string('color-entity').trim();
+        const sliderEntity = this._settings.get_string('slider-entity').trim();
+
+        if (entity_id === sliderEntity) {
+            const suppressed = Date.now() < this._suppressLiveUntil;
+            console.log(`[RoomPanel] slider live event: ${entity_id}, suppressed=${suppressed}, attrs=${JSON.stringify(new_state?.attributes)}`);
+        }
+
+        if (Date.now() < this._suppressLiveUntil) return;
+
+        // Both checks independent — same entity can drive color AND slider
+        if (entity_id === colorEntity)
+            this._applyColorState(new_state);
+        if (entity_id === sliderEntity)
+            this._applySliderState(new_state);
+    }
+
+    /** Push a fresh HA color state into the wheel + preview. */
+    _applyColorState(state) {
+        const rgb = state?.attributes?.rgb_color;
+        // Only handle rgb_color for now; hs_color / xy_color ignored in v1
+        if (!Array.isArray(rgb) || rgb.length < 3) return;
+        const clamped = rgb.map(v => Math.max(0, Math.min(255, Math.round(v))));
+        this._colorWheel.setColor(clamped);
+        this._updateColorPreview(clamped);
+    }
+
+    /** Push a fresh HA slider state into the Slider widget. */
+    _applySliderState(state) {
+        const attribute = this._settings.get_string('slider-attribute').trim();
+        if (!attribute || !state?.attributes) {
+            console.log(`[RoomPanel] applySlider: skipped — attr='${attribute}', hasAttrs=${!!state?.attributes}`);
+            return;
+        }
+
+        const raw = state.attributes[attribute];
+        if (raw === undefined || raw === null) {
+            console.log(`[RoomPanel] applySlider: attr '${attribute}' not in state (available: ${Object.keys(state.attributes ?? {}).join(', ')})`);
+            return;
+        }
+
+        const min = this._settings.get_double('slider-min');
+        const max = this._settings.get_double('slider-max');
+        if (max <= min) {
+            console.log(`[RoomPanel] applySlider: invalid range min=${min} max=${max}`);
+            return;
+        }
+
+        const normalized = Math.max(0, Math.min(1, (Number(raw) - min) / (max - min)));
+        console.log(`[RoomPanel] applySlider: attr=${attribute} raw=${raw} min=${min} max=${max} normalized=${normalized}`);
+        // Setter never emits value-changed, so no feedback loop possible
+        this._slider.value = normalized;
+    }
+
+    /** Call before every user-initiated HA command to suppress echo-updates. */
+    _markUserCommand() {
+        this._suppressLiveUntil = Date.now() + 2000;
     }
 
     _syncSectionVisibility() {
         const showColor = this._settings.get_string('color-entity').trim() !== '';
         const showSlider = this._settings.get_string('slider-entity').trim() !== '';
-        const showButtons = true;
 
         this._colorItem.visible = showColor;
         this._sliderItem.visible = showSlider;
-        this._colorSeparator.visible = showColor && (showSlider || showButtons);
-        this._sliderSeparator.visible = showSlider && showButtons;
+        this._sliderSeparator.visible = showSlider;
     }
 
     _rebuildButtons() {
@@ -290,6 +398,12 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this._colorEntityLabel.text = formatEntityLabel(this._settings.get_string('color-entity'));
     }
 
+    _updateSliderLabel() {
+        const entity = this._settings.get_string('slider-entity').trim();
+        const name = entity ? formatEntityLabel(entity) : 'Value';
+        this._sliderLabel.text = name;
+    }
+
     _copyCurrentColor() {
         const clipboard = St.Clipboard.get_default();
         clipboard.set_text(St.ClipboardType.CLIPBOARD, this._colorValue.text);
@@ -323,15 +437,27 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             return;
         }
 
-        for (const hex of this._colorHistory) {
-            const swatch = new St.Button({
-                style_class: 'button roompanel-history-swatch',
-                can_focus: true,
-                reactive: true,
+        for (let i = 0; i < this._colorHistory.length; i += 2) {
+            const row = new St.BoxLayout({
+                vertical: false,
+                x_expand: true,
+                style_class: 'roompanel-history-row',
             });
-            swatch.set_style(`background-color: ${hex};`);
-            swatch.connect('clicked', () => this._applyHistoryColor(hex));
-            this._historyBox.add_child(swatch);
+
+            for (let j = i; j < Math.min(i + 2, this._colorHistory.length); j++) {
+                const hex = this._colorHistory[j];
+                const swatch = new St.Button({
+                    style_class: 'button roompanel-history-swatch',
+                    x_expand: true,
+                    can_focus: true,
+                    reactive: true,
+                });
+                swatch.set_style(`background-color: ${hex};`);
+                swatch.connect('clicked', () => this._applyHistoryColor(hex));
+                row.add_child(swatch);
+            }
+
+            this._historyBox.add_child(row);
         }
     }
 
@@ -398,6 +524,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         if (!entity || !service)
             return;
 
+        this._markUserCommand();
+
         const [domain, svc] = service.split('.');
         if (!entityMatchesDomain(entity, domain)) {
             console.error(`[RoomPanel] Color call skipped: entity "${entity}" does not match service domain "${domain}"`);
@@ -419,6 +547,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         if (!entity || !service)
             return;
 
+        this._markUserCommand();
+
         const min = this._settings.get_double('slider-min');
         const max = this._settings.get_double('slider-max');
         const value = Math.round(min + this._slider.value * (max - min));
@@ -438,6 +568,8 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
     }
 
     destroy() {
+        this._haClient.disconnectLive();
+
         if (this._settingsChangedId) {
             this._settings.disconnect(this._settingsChangedId);
             this._settingsChangedId = null;
