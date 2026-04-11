@@ -69,6 +69,7 @@ export function rgbToHex([r, g, b]) {
 export const ColorWheel = GObject.registerClass({
     Signals: {
         'color-changed': {},
+        'color-selected': {},
     },
 }, class ColorWheel extends St.DrawingArea {
     _init(params = {}) {
@@ -84,6 +85,7 @@ export const ColorWheel = GObject.registerClass({
 
         this._padding = 8;
         this._dragging = false;
+        this._selectionDirty = false;
         this._rgb = [255, 255, 255];
         this._wheelSurface = null;
         this._wheelSurfaceKey = '';
@@ -105,6 +107,7 @@ export const ColorWheel = GObject.registerClass({
 
     _onButtonPress(event) {
         this._dragging = true;
+        this._selectionDirty = false;
         this.grab_key_focus();
         this._pickColorFromEvent(event);
         return Clutter.EVENT_STOP;
@@ -119,7 +122,11 @@ export const ColorWheel = GObject.registerClass({
     }
 
     _onButtonRelease() {
+        if (this._dragging && this._selectionDirty)
+            this.emit('color-selected');
+
         this._dragging = false;
+        this._selectionDirty = false;
         return Clutter.EVENT_STOP;
     }
 
@@ -134,6 +141,7 @@ export const ColorWheel = GObject.registerClass({
             return;
 
         this.setColor(rgb);
+        this._selectionDirty = true;
         this.emit('color-changed');
     }
 

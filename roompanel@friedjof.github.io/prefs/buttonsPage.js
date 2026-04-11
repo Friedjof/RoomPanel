@@ -596,7 +596,7 @@ class ButtonListRow extends Adw.ActionRow {
 
         const editBtn = new Gtk.Button({ icon_name: 'document-edit-symbolic',
             css_classes: ['flat'], valign: Gtk.Align.CENTER, tooltip_text: 'Edit' });
-        const deleteBtn = new Gtk.Button({ icon_name: 'user-trash-symbolic',
+        const deleteBtn = new Gtk.Button({ icon_name: 'edit-delete-symbolic',
             css_classes: ['flat', 'destructive-action'], valign: Gtk.Align.CENTER,
             tooltip_text: 'Delete' });
 

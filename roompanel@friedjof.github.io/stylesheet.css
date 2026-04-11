@@ -4,20 +4,20 @@
   width: 340px;
   min-width: 340px;
   max-width: 340px;
-  padding: 8px;
+  padding: 6px 6px 4px 6px;
 }
 
 .roompanel-color-header {
-  spacing: 8px;
+  spacing: 6px;
 }
 
 .roompanel-section-label {
   font-size: 0.85em;
   font-weight: bold;
   color: rgba(255, 255, 255, 0.6);
-  margin-top: 8px;
-  margin-bottom: 4px;
-  padding-left: 4px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  padding-left: 2px;
 }
 
 .roompanel-color-value {
@@ -25,17 +25,47 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+.roompanel-icon-button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 4px;
+}
+
 .roompanel-color-preview {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.roompanel-color-body {
+  spacing: 10px;
 }
 
 .roompanel-color-wheel {
   width: 156px;
   height: 156px;
-  margin: 8px 0 4px 4px;
+  margin: 2px 0 0 0;
+}
+
+.roompanel-color-history {
+  spacing: 6px;
+  margin-top: 2px;
+}
+
+.roompanel-history-swatch {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 0;
+}
+
+.roompanel-history-placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85em;
 }
 
 .roompanel-action-button {
@@ -62,6 +92,6 @@
 }
 
 .roompanel-separator {
-  margin-top: 6px;
-  margin-bottom: 6px;
+  margin-top: 2px;
+  margin-bottom: 2px;
 }
