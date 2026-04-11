@@ -36,9 +36,9 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
 
         const colorBox = new St.BoxLayout({
             vertical: true,
-            style_class: 'roompanel-menu',
             x_expand: true,
         });
+        colorBox.add_style_class_name('roompanel-menu');
         this._colorItem.add_child(colorBox);
 
         const colorHeader = new St.BoxLayout({
@@ -83,6 +83,7 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this.addMenuItem(this._sliderItem);
 
         const sliderBox = new St.BoxLayout({ vertical: true, x_expand: true });
+        sliderBox.add_style_class_name('roompanel-menu');
         this._sliderItem.add_child(sliderBox);
 
         const sliderLabel = new St.Label({
@@ -115,10 +116,11 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
         this.addMenuItem(this._buttonsItem);
 
         this._buttonsBox = new St.BoxLayout({
-            vertical: false,
-            style_class: 'roompanel-buttons-box',
+            vertical: true,
             x_expand: true,
         });
+        this._buttonsBox.add_style_class_name('roompanel-menu');
+        this._buttonsBox.add_style_class_name('roompanel-buttons-box');
         this._buttonsItem.add_child(this._buttonsBox);
 
         this._rebuildButtons();
@@ -171,9 +173,19 @@ export class RoomPanelMenu extends PopupMenu.PopupMenuSection {
             return;
         }
 
-        for (const config of slice) {
-            const btn = new ActionButton(config, this._haClient);
-            this._buttonsBox.add_child(btn);
+        for (let i = 0; i < slice.length; i += 2) {
+            const row = new St.BoxLayout({
+                vertical: false,
+                x_expand: true,
+                style_class: 'roompanel-button-row',
+            });
+
+            for (const config of slice.slice(i, i + 2)) {
+                const btn = new ActionButton(config, this._haClient);
+                row.add_child(btn);
+            }
+
+            this._buttonsBox.add_child(row);
         }
     }
 

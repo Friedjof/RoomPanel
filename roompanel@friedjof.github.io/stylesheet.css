@@ -1,7 +1,9 @@
 /* RoomPanel – custom styles */
 
 .roompanel-menu {
-  min-width: 280px;
+  width: 340px;
+  min-width: 340px;
+  max-width: 340px;
   padding: 8px;
 }
 
@@ -52,7 +54,11 @@
 }
 
 .roompanel-buttons-box {
-  spacing: 4px;
+  spacing: 6px;
+}
+
+.roompanel-button-row {
+  spacing: 6px;
 }
 
 .roompanel-separator {
