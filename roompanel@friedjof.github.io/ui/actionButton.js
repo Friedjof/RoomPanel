@@ -135,7 +135,7 @@ class ActionButton extends St.Button {
             style_class: 'roompanel-action-button-meta roompanel-action-button-meta-service',
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.CENTER,
-        }));
+        });
         this._serviceLabel.clutter_text.line_wrap = false;
         metaRow.add_child(this._serviceLabel);
 
