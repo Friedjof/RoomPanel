@@ -105,8 +105,10 @@ export function getIcon(config, state) {
     return (dc && DEVICE_CLASS_ICONS[dc]) || FALLBACK_ICON;
 }
 
-/** Friendly name: HA attribute → formatted entity_id. */
+/** Display name: config override → HA friendly_name → formatted entity_id. */
 export function getName(config, state) {
+    if (config.display_name)
+        return config.display_name;
     return state?.attributes?.friendly_name ?? formatEntityId(config.entity_id ?? '');
 }
 
