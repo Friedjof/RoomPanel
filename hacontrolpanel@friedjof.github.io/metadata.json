@@ -2,7 +2,7 @@
   "uuid": "hacontrolpanel@friedjof.github.io",
   "name": "HAControlPanel",
   "description": "Home Assistant control panel in the GNOME top bar — color picker, slider, and configurable action buttons.",
-  "version": 5,
+  "version": 11,
   "shell-version": ["45", "46", "47"],
   "url": "https://github.com/friedjof/HAControlPanel",
   "settings-schema": "org.gnome.shell.extensions.hacontrolpanel",
