@@ -11,54 +11,28 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    env:
-      EGO_USERNAME: ${{ secrets.EGO_USERNAME }}
-      EGO_PASSWORD: ${{ secrets.EGO_PASSWORD }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libglib2.0-bin zip
-
-      - name: Build extension bundle
-        run: make pack
-
-      - name: Skip EGO upload when secrets are missing
-        if: ${{ env.EGO_USERNAME == '' || env.EGO_PASSWORD == '' }}
-        run: echo "EGO_USERNAME or EGO_PASSWORD is not configured; skipping extensions.gnome.org upload."
-
-      - name: Install EGO upload dependencies
-        if: ${{ env.EGO_USERNAME != '' && env.EGO_PASSWORD != '' }}
-        run: |
-          sudo apt-get install -y gnome-shell
-
-      - name: Verify gnome-extensions upload support
-        if: ${{ env.EGO_USERNAME != '' && env.EGO_PASSWORD != '' }}
-        run: |
-          if ! gnome-extensions help upload >/dev/null 2>&1; then
-            echo "This runner does not provide a gnome-extensions CLI with the upload subcommand."
-            echo "Update the runner image or switch this workflow to a dedicated upload action."
-            exit 1
-          fi
-
-      - name: Upload to extensions.gnome.org
-        if: ${{ env.EGO_USERNAME != '' && env.EGO_PASSWORD != '' }}
-        run: |
-          gnome-extensions upload \
-            --accept-tos \
-            --user "${EGO_USERNAME}" \
-            --password "${EGO_PASSWORD}" \
-            dist/hacontrolpanel@friedjof.github.io.shell-extension.zip
+      - name: Package extension and upload to extensions.gnome.org
+        id: ego
+        uses: murar8/gnome-extensions-action@0.1.1
+        with:
+          source-dir: ./hacontrolpanel@friedjof.github.io
+          output-dir: ./dist
+          schema: ./hacontrolpanel@friedjof.github.io/schemas/org.gnome.shell.extensions.hacontrolpanel.gschema.xml
+          username: ${{ secrets.EGO_USERNAME }}
+          password: ${{ secrets.EGO_PASSWORD }}
+          accept-tos: true
+          force: true
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/*.zip \
+          gh release create "${GITHUB_REF_NAME}" "${{ steps.ego.outputs.zip-file }}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "HAControlPanel ${GITHUB_REF_NAME}" \
             --generate-notes \
