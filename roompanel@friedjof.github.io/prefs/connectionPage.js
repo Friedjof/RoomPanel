@@ -31,10 +31,24 @@ export const ConnectionPage = GObject.registerClass(
             });
             group.add(this._urlRow);
 
-            this._tokenRow = new Adw.PasswordEntryRow({
+            // Token is never pre-filled — the real value stays in GSettings only.
+            // The field is always empty on open; the dot count cannot reveal length.
+            // Adw.EntryRow + manual visibility=false avoids the reveal-eye of PasswordEntryRow.
+            this._storedToken = settings.get_string('ha-token');
+            this._tokenRow = new Adw.EntryRow({
                 title: 'Long-Lived Access Token',
-                text: settings.get_string('ha-token'),
+                text: '',
+                show_apply_button: true,
             });
+            // Mask input without the built-in reveal button
+            const tokenText = this._tokenRow.get_delegate();
+            if (tokenText) {
+                tokenText.set_visibility(false);
+                tokenText.set_input_purpose(Gtk.InputPurpose.PASSWORD);
+            }
+            this._tokenRow.placeholder_text = this._storedToken
+                ? 'Token saved — enter new token to replace'
+                : 'Paste token here';
             group.add(this._tokenRow);
 
             this._sslRow = new Adw.SwitchRow({
@@ -115,8 +129,16 @@ export const ConnectionPage = GObject.registerClass(
             // ── Save on change ─────────────────────────────────────────
             this._urlRow.connect('changed', () =>
                 settings.set_string('ha-url', this._urlRow.text));
-            this._tokenRow.connect('changed', () =>
-                settings.set_string('ha-token', this._tokenRow.text));
+            this._tokenRow.connect('apply', () => {
+                const val = this._tokenRow.text.trim();
+                if (val) {
+                    this._storedToken = val;
+                    settings.set_string('ha-token', val);
+                    this._tokenRow.text = '';
+                    this._tokenRow.placeholder_text = 'Token saved — enter new token to replace';
+                }
+                // Empty apply → ignore, keep existing token
+            });
             this._sslRow.connect('notify::active', () =>
                 settings.set_boolean('ha-verify-ssl', this._sslRow.active));
 
@@ -142,7 +164,7 @@ export const ConnectionPage = GObject.registerClass(
             const client = new HaClient();
             client.setCredentials(
                 this._urlRow.text,
-                this._tokenRow.text,
+                this._tokenRow.text.trim() || this._storedToken,
                 this._sslRow.active
             );
 
