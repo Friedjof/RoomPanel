@@ -1,7 +1,8 @@
 .claude/
 dist/
+
 *.log
 *.swp
 *.zip
+
 .DS_Store
-roompanel@friedjof.github.io/schemas/gschemas.compiled
