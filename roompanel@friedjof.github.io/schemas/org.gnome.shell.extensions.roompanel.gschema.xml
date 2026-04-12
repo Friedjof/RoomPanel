@@ -48,10 +48,10 @@
       <summary>Enable Screen Sync</summary>
       <description>Periodically sample the screen and send the resulting RGB color to a Home Assistant light entity</description>
     </key>
-    <key name="screen-sync-entity" type="s">
-      <default>""</default>
-      <summary>Screen Sync Target Entity</summary>
-      <description>Home Assistant light entity to control with screen sync</description>
+    <key name="screen-sync-entities" type="s">
+      <default>"[]"</default>
+      <summary>Screen Sync Target Entities</summary>
+      <description>JSON array of {entity_id, enabled} objects for screen sync target lights</description>
     </key>
     <key name="screen-sync-interval" type="d">
       <default>2.0</default>
@@ -97,6 +97,11 @@
       <default>""</default>
       <summary>Screen Sync Preview Accent Color</summary>
       <description>Transient preview result for the accent screen color as a hex string</description>
+    </key>
+    <key name="screen-sync-preview-backlight" type="s">
+      <default>""</default>
+      <summary>Screen Sync Preview Backlight Color</summary>
+      <description>Transient preview result for the backlight screen color as a hex string</description>
     </key>
     <key name="screen-sync-preview-error" type="s">
       <default>""</default>

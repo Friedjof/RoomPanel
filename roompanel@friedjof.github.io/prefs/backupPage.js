@@ -24,7 +24,18 @@ function applyObjectToSettings(obj, settings) {
 
     const screenSync = obj.panel?.screen_sync ?? {};
     if (screenSync.enabled !== undefined) settings.set_boolean('screen-sync-enabled', !!screenSync.enabled);
-    if (screenSync.entity !== undefined) settings.set_string('screen-sync-entity', String(screenSync.entity));
+    if (Array.isArray(screenSync.entities)) {
+        // New format: [{entity_id, enabled}] — or legacy string array
+        const normalized = screenSync.entities.map(e =>
+            typeof e === 'string'
+                ? { entity_id: e, enabled: true }
+                : { entity_id: String(e.entity_id ?? ''), enabled: e.enabled !== false }
+        ).filter(e => e.entity_id);
+        settings.set_string('screen-sync-entities', JSON.stringify(normalized));
+    } else if (screenSync.entity !== undefined) {
+        const entityId = String(screenSync.entity);
+        settings.set_string('screen-sync-entities', entityId ? JSON.stringify([{ entity_id: entityId, enabled: true }]) : '[]');
+    }
     if (screenSync.interval !== undefined) settings.set_double('screen-sync-interval', Number(screenSync.interval) || 2.0);
     if (screenSync.mode !== undefined) settings.set_string('screen-sync-mode', String(screenSync.mode));
     if (screenSync.scope !== undefined) settings.set_string('screen-sync-scope', String(screenSync.scope));
@@ -43,6 +54,9 @@ function applyObjectToSettings(obj, settings) {
 
     if (Array.isArray(obj.buttons))
         settings.set_string('buttons-config', JSON.stringify(obj.buttons));
+
+    if (Array.isArray(obj.sensors))
+        settings.set_string('sensor-widgets-config', JSON.stringify(obj.sensors));
 
     const backup = obj.backup ?? {};
     if (backup.auto !== undefined) settings.set_boolean('auto-yaml-backup', !!backup.auto);

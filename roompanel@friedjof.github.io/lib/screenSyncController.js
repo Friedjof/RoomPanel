@@ -7,7 +7,7 @@ const SAMPLE_ROWS = 3;
 const COLOR_DIFF_THRESHOLD = 18;
 const CONFIG_KEYS = new Set([
     'screen-sync-enabled',
-    'screen-sync-entity',
+    'screen-sync-entities',
     'screen-sync-interval',
     'screen-sync-mode',
     'screen-sync-scope',
@@ -200,6 +200,14 @@ function accentColor(colors) {
     return base ? boostColor(base, 0.72, 1.28, 0.40) : null;
 }
 
+function backlightColor(colors) {
+    if (!colors.length)
+        return null;
+
+    const base = dominantColor(colors);
+    return base ? boostColor(base, 0.80, 1.60, 0.44) : null;
+}
+
 function colorForMode(mode, colors) {
     switch (mode) {
     case 'average':
@@ -208,6 +216,8 @@ function colorForMode(mode, colors) {
         return vibrantColor(colors);
     case 'accent':
         return accentColor(colors);
+    case 'backlight':
+        return backlightColor(colors);
     case 'dominant':
     default:
         return dominantColor(colors);
@@ -275,9 +285,20 @@ export class ScreenSyncController {
         }
     }
 
+    _getActiveEntities() {
+        try {
+            const configs = JSON.parse(this._settings.get_string('screen-sync-entities'));
+            return configs
+                .filter(c => c.enabled !== false && c.entity_id?.trim().startsWith('light.'))
+                .map(c => c.entity_id.trim());
+        } catch {
+            return [];
+        }
+    }
+
     _shouldRun() {
         return this._settings.get_boolean('screen-sync-enabled') &&
-            this._settings.get_string('screen-sync-entity').trim().startsWith('light.');
+            this._getActiveEntities().length > 0;
     }
 
     _restart() {
@@ -320,8 +341,12 @@ export class ScreenSyncController {
             if (colorDistance(this._lastSentColor, nextColor) < COLOR_DIFF_THRESHOLD)
                 return;
 
+            const entities = this._getActiveEntities();
+            if (!entities.length)
+                return;
+
             await this._haClient.callService('light', 'turn_on', {
-                entity_id: this._settings.get_string('screen-sync-entity').trim(),
+                entity_id: entities,
                 rgb_color: nextColor,
             });
 
@@ -349,11 +374,13 @@ export class ScreenSyncController {
             const average = colorForMode('average', colors);
             const vibrant = colorForMode('vibrant', colors);
             const accent = colorForMode('accent', colors);
+            const backlight = colorForMode('backlight', colors);
 
             this._settings.set_string('screen-sync-preview-dominant', dominant ? rgbToHex(dominant) : '');
             this._settings.set_string('screen-sync-preview-average', average ? rgbToHex(average) : '');
             this._settings.set_string('screen-sync-preview-vibrant', vibrant ? rgbToHex(vibrant) : '');
             this._settings.set_string('screen-sync-preview-accent', accent ? rgbToHex(accent) : '');
+            this._settings.set_string('screen-sync-preview-backlight', backlight ? rgbToHex(backlight) : '');
             this._settings.set_string(
                 'screen-sync-preview-error',
                 colors.length ? '' : 'No screen samples could be collected.'
@@ -363,6 +390,7 @@ export class ScreenSyncController {
             this._settings.set_string('screen-sync-preview-average', '');
             this._settings.set_string('screen-sync-preview-vibrant', '');
             this._settings.set_string('screen-sync-preview-accent', '');
+            this._settings.set_string('screen-sync-preview-backlight', '');
             this._settings.set_string('screen-sync-preview-error', e?.message ?? String(e));
         } finally {
             this._settings.set_int('screen-sync-preview-response', requestId);

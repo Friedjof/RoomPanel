@@ -29,7 +29,7 @@ export function settingsToObject(settings) {
             },
             screen_sync: {
                 enabled: settings.get_boolean('screen-sync-enabled'),
-                entity: settings.get_string('screen-sync-entity'),
+                entities: (() => { try { return JSON.parse(settings.get_string('screen-sync-entities')); } catch { return []; } })(),
                 interval: settings.get_double('screen-sync-interval'),
                 mode: settings.get_string('screen-sync-mode'),
                 scope: settings.get_string('screen-sync-scope'),
