@@ -94,15 +94,16 @@ class SensorWidgetDialog extends Adw.Dialog {
 
         // Work on a mutable copy with defaults
         this._cfg = {
-            entity_id:    '',
-            widget_type:  'value',
-            attribute:    '',
+            entity_id:     '',
+            display_name:  '',
+            widget_type:   'value',
+            attribute:     '',
             unit_override: '',
-            icon:         '',
-            span:         'half',
-            min:          0,
-            max:          100,
-            severity:     null,
+            icon:          '',
+            span:          'half',
+            min:           0,
+            max:           100,
+            severity:      null,
             ...config,
         };
 
@@ -118,6 +119,16 @@ class SensorWidgetDialog extends Adw.Dialog {
             text: this._cfg.entity_id,
         });
         entityGroup.add(this._entityRow);
+
+        this._displayNameRow = new Adw.EntryRow({
+            title: 'Display name',
+            text: this._cfg.display_name ?? '',
+        });
+        this._displayNameRow.set_tooltip_text('Optional label shown on the tile (overrides friendly name from HA)');
+        entityGroup.add(this._displayNameRow);
+        this._displayNameRow.connect('changed', () => {
+            this._cfg.display_name = this._displayNameRow.text.trim() || null;
+        });
 
         const searchBtn = new Gtk.Button({
             icon_name: 'system-search-symbolic',

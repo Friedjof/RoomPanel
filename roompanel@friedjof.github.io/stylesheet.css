@@ -247,6 +247,112 @@
     0 2px 4px rgba(0, 0, 0, 0.26);
 }
 
+/* ── Sensor tile grid ──────────────────────────────────────────────────────── */
+
+.roompanel-sensors-grid {
+  spacing: 6px;
+  padding-top: 2px;
+}
+
+.roompanel-sensor-row {
+  spacing: 6px;
+}
+
+.roompanel-sensor-tile {
+  padding: 10px 10px 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* ── Icon circle ───────────────────────────────────────────────────────────── */
+
+.roompanel-sensor-icon-wrap {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.08);
+  margin-right: 8px;
+}
+
+.roompanel-sensor-icon {
+  icon-size: 14px;
+  color: rgba(255, 255, 255, 0.70);
+}
+
+/* ── Text elements ─────────────────────────────────────────────────────────── */
+
+.roompanel-sensor-col {
+  spacing: 1px;
+}
+
+.roompanel-sensor-value-row {
+  spacing: 2px;
+}
+
+.roompanel-sensor-value {
+  font-size: 1.30em;
+  font-weight: bold;
+  color: #f0f4fb;
+}
+
+.roompanel-sensor-unit {
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.62);
+  padding-bottom: 1px;
+}
+
+.roompanel-sensor-name {
+  font-size: 0.72em;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.roompanel-sensor-name-top {
+  margin-bottom: 1px;
+}
+
+.roompanel-sensor-trend-top {
+  spacing: 0;
+}
+
+.roompanel-sensor-trend-name {
+  color: rgba(255, 255, 255, 0.60);
+  font-size: 0.78em;
+}
+
+/* ── Gauge bar ─────────────────────────────────────────────────────────────── */
+
+.roompanel-gauge-bar {
+  height: 6px;
+  min-height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+}
+
+/* ── Sparkline ─────────────────────────────────────────────────────────────── */
+
+.roompanel-sparkline {
+  height: 28px;
+  min-height: 28px;
+  margin-top: 4px;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+
+.roompanel-sensor-empty-title {
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.42);
+  padding: 4px 2px 2px 2px;
+}
+
+.roompanel-sensor-empty-subtitle {
+  font-size: 0.80em;
+  color: rgba(255, 255, 255, 0.28);
+  padding: 0 2px 6px 2px;
+}
+
 .roompanel-action-button:active {
   background-color: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.24);
