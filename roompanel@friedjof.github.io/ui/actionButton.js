@@ -167,7 +167,7 @@ class ActionButton extends St.Button {
         if (!domain || !service)
             return;
         if (!_entityMatchesDomain(entity_id, domain)) {
-            console.error(`[RoomPanel] Ignoring invalid button config: entity "${entity_id}" does not match service domain "${domain}"`);
+            console.error(`[HAControlPanel] Ignoring invalid button config: entity "${entity_id}" does not match service domain "${domain}"`);
             return;
         }
 
@@ -192,7 +192,7 @@ class ActionButton extends St.Button {
         try {
             await this._haClient.callService(domain, service, data);
         } catch (e) {
-            console.error(`[RoomPanel] Failed to call ${domain}.${service}:`, e.message);
+            console.error(`[HAControlPanel] Failed to call ${domain}.${service}:`, e.message);
         }
     }
 });

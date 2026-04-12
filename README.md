@@ -1,21 +1,22 @@
-# RoomPanel
+# HAControlPanel
 
-RoomPanel is a GNOME Shell extension that adds a compact Home Assistant control panel to the top bar. It is built for quick everyday actions: lights, sliders, custom service buttons, read-only sensor tiles, and optional screen sync for RGB lights.
+HAControlPanel is a GNOME Shell extension that adds a compact Home Assistant control panel to the top bar. It is built for quick everyday actions: lights, sliders, custom service buttons, read-only sensor tiles, and optional screen sync for RGB lights.
 
 > This repository is currently in beta. Significant parts of the project are developed with AI assistance, so behavior, UX, and internal structure may still change quickly.
+> For compatibility, the extension UUID and bundle name currently still use `roompanel@friedjof.github.io`.
 
 <table>
   <tr>
     <td align="center" width="34%">
-      <img src="media/action-panel.png" alt="RoomPanel panel with color picker, slider, and action buttons" height="250"><br>
+      <img src="media/action-panel.png" alt="HAControlPanel panel with color picker, slider, and action buttons" height="250"><br>
       <sub>🎛️ Panel: color picker, sliders, and quick action buttons</sub>
     </td>
     <td align="center" width="33%">
-      <img src="media/screen-sync.png" alt="RoomPanel screen sync settings" height="250"><br>
+      <img src="media/screen-sync.png" alt="HAControlPanel screen sync settings" height="250"><br>
       <sub>🖥️ Screen Sync: multi-light sync, preview, and condition gating</sub>
     </td>
     <td align="center" width="33%">
-      <img src="media/settings.png" alt="RoomPanel preferences dialog" height="250"><br>
+      <img src="media/settings.png" alt="HAControlPanel preferences dialog" height="250"><br>
       <sub>⚙️ Preferences: connection, actions, sensors, and backup</sub>
     </td>
   </tr>

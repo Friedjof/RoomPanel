@@ -1335,7 +1335,7 @@ class ButtonsPage extends Adw.PreferencesPage {
             this._finishScreenSyncPreviewRequest();
             if (stillPending) {
                 this._showScreenSyncPreviewError(
-                    'No preview response arrived from the running extension. The preview only works while RoomPanel is enabled in GNOME Shell.'
+                    'No preview response arrived from the running extension. The preview only works while HAControlPanel is enabled in GNOME Shell.'
                 );
             }
             return GLib.SOURCE_REMOVE;

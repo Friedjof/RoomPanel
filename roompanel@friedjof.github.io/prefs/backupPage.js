@@ -243,7 +243,7 @@ export const BackupPage = GObject.registerClass(
         _refreshPreview() {
             const date = new Date().toISOString().split('T')[0];
             const obj = settingsToObject(this._settings);
-            const yaml = serialize(obj, `RoomPanel Backup – ${date}`);
+            const yaml = serialize(obj, `HAControlPanel Backup – ${date}`);
             this._previewBuffer.set_text(yaml, -1);
         }
 
@@ -271,7 +271,7 @@ export const BackupPage = GObject.registerClass(
 
             const date = new Date().toISOString().split('T')[0];
             const obj = settingsToObject(this._settings);
-            const yaml = serialize(obj, `RoomPanel Backup – ${date}`);
+            const yaml = serialize(obj, `HAControlPanel Backup – ${date}`);
             const bytes = new TextEncoder().encode(yaml);
 
             try {
@@ -527,7 +527,7 @@ export const BackupPage = GObject.registerClass(
 
                 // Write the file
                 const date = new Date().toISOString().split('T')[0];
-                const yaml = serialize(settingsToObject(this._settings), `RoomPanel Backup – ${date}`);
+                const yaml = serialize(settingsToObject(this._settings), `HAControlPanel Backup – ${date}`);
                 try {
                     const parent = file.get_parent();
                     parent?.make_directory_with_parents(null);

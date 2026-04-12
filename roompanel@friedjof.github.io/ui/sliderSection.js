@@ -356,7 +356,7 @@ export class SliderSection {
                     [cfg.attribute]: value,
                 });
             } catch (e) {
-                console.error('[RoomPanel] Slider call failed:', e.message);
+                console.error('[HAControlPanel] Slider call failed:', e.message);
             }
         }
     }

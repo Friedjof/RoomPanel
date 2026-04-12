@@ -596,7 +596,7 @@ export class ColorSection {
         const [domain, svc] = service.split('.');
         const validTargets = targets.filter(e => entityMatchesDomain(e, domain));
         if (validTargets.length === 0) {
-            console.error(`[RoomPanel] Color call skipped: no entities match domain "${domain}"`);
+            console.error(`[HAControlPanel] Color call skipped: no entities match domain "${domain}"`);
             return;
         }
 
@@ -613,7 +613,7 @@ export class ColorSection {
                 });
             }
         } catch (e) {
-            console.error('[RoomPanel] Color call failed:', e.message);
+            console.error('[HAControlPanel] Color call failed:', e.message);
         }
     }
 }

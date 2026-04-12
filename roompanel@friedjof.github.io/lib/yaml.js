@@ -1,5 +1,5 @@
 /**
- * Lightweight YAML serializer/parser for RoomPanel settings backup.
+ * Lightweight YAML serializer/parser for HAControlPanel settings backup.
  * Supports: strings, numbers, booleans, null, plain objects, arrays.
  * Does NOT support: anchors, aliases, multi-document, complex types.
  */

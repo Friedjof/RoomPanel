@@ -1,5 +1,5 @@
 /**
- * Semantic validator for the RoomPanel YAML config format.
+ * Semantic validator for the HAControlPanel YAML config format.
  *
  * Returns { errors: string[], warnings: string[] }
  * Errors   = things that will definitely break functionality.
@@ -262,7 +262,7 @@ function checkBackup(backup, _errors, warnings) {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Validate a parsed RoomPanel config object.
+ * Validate a parsed HAControlPanel config object.
  * @param {object} obj - parsed YAML object
  * @returns {{ errors: string[], warnings: string[] }}
  */

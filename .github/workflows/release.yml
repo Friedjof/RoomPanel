@@ -30,6 +30,6 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/*.zip \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "RoomPanel ${GITHUB_REF_NAME}" \
+            --title "HAControlPanel ${GITHUB_REF_NAME}" \
             --generate-notes \
             --verify-tag

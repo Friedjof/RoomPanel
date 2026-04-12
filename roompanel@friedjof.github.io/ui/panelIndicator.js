@@ -6,12 +6,12 @@ import { RoomPanelMenu } from './panelMenu.js';
 
 /**
  * The 🏠 button in the GNOME top bar.
- * Clicking it opens the RoomPanelMenu dropdown.
+ * Clicking it opens the HAControlPanel menu dropdown.
  */
 export const RoomPanelIndicator = GObject.registerClass(
     class RoomPanelIndicator extends PanelMenu.Button {
         _init(settings, haClient, openPrefs) {
-            super._init(0.0, 'RoomPanel');
+            super._init(0.0, 'HAControlPanel');
 
             this._settings = settings;
             this._haClient = haClient;

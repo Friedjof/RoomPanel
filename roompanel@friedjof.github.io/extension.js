@@ -47,7 +47,7 @@ export default class RoomPanelExtension extends Extension {
         try {
             await this.openPreferences();
         } catch (e) {
-            console.error('[RoomPanel] Failed to open preferences:', e);
+            console.error('[HAControlPanel] Failed to open preferences:', e);
         }
     }
 
@@ -79,13 +79,13 @@ export default class RoomPanelExtension extends Extension {
         obj.backup.auto = true;
         obj.backup.path = path;
 
-        const yaml = serialize(obj, `RoomPanel Backup – ${date}`);
+        const yaml = serialize(obj, `HAControlPanel Backup – ${date}`);
         const bytes = new TextEncoder().encode(yaml);
 
         try {
             GLib.file_set_contents(path, bytes);
         } catch (e) {
-            console.error('[RoomPanel] Auto-backup failed:', e.message);
+            console.error('[HAControlPanel] Auto-backup failed:', e.message);
         }
     }
 

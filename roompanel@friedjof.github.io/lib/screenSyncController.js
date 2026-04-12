@@ -362,7 +362,7 @@ export class ScreenSyncController {
             const message = e?.message ?? String(e);
             if (message !== this._lastConditionError) {
                 this._lastConditionError = message;
-                console.error(`[RoomPanel] Screen sync condition failed: ${message}`);
+                console.error(`[HAControlPanel] Screen sync condition failed: ${message}`);
             }
             return false;
         }
@@ -396,7 +396,7 @@ export class ScreenSyncController {
             const message = e?.message ?? String(e);
             if (message !== this._lastConditionError) {
                 this._lastConditionError = message;
-                console.error(`[RoomPanel] Screen sync condition refresh failed: ${message}`);
+                console.error(`[HAControlPanel] Screen sync condition refresh failed: ${message}`);
             }
             this._setConditionState(false, true);
         }
@@ -487,7 +487,7 @@ export class ScreenSyncController {
             const message = e?.message ?? String(e);
             if (message !== this._lastError) {
                 this._lastError = message;
-                console.error(`[RoomPanel] Screen sync failed: ${message}`);
+                console.error(`[HAControlPanel] Screen sync failed: ${message}`);
             }
         } finally {
             this._running = false;

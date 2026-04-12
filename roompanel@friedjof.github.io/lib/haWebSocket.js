@@ -104,7 +104,7 @@ export class HaWebSocket {
                     try {
                         this._ws = this._getSession().websocket_connect_finish(result);
                     } catch (e) {
-                        console.error('[RoomPanel] WS connect failed:', e.message);
+                        console.error('[HAControlPanel] WS connect failed:', e.message);
                         this._wsScheduleReconnect();
                         return;
                     }
@@ -120,7 +120,7 @@ export class HaWebSocket {
                                 new TextDecoder('utf-8').decode(bytes.get_data())
                             );
                         } catch (e) {
-                            console.error('[RoomPanel] WS message parse error:', e.message);
+                            console.error('[HAControlPanel] WS message parse error:', e.message);
                         }
                     });
 
@@ -131,12 +131,12 @@ export class HaWebSocket {
                     });
 
                     this._ws.connect('error', (_conn, err) => {
-                        console.error('[RoomPanel] WS error:', err.message);
+                        console.error('[HAControlPanel] WS error:', err.message);
                     });
                 }
             );
         } catch (e) {
-            console.error('[RoomPanel] WS setup failed:', e.message);
+            console.error('[HAControlPanel] WS setup failed:', e.message);
             this._wsScheduleReconnect();
         }
     }
@@ -159,7 +159,7 @@ export class HaWebSocket {
                 break;
 
             case 'auth_invalid':
-                console.error('[RoomPanel] WS: authentication rejected');
+                console.error('[HAControlPanel] WS: authentication rejected');
                 // Do not reconnect – wrong token won't fix itself
                 this._wsClose();
                 break;
@@ -170,7 +170,7 @@ export class HaWebSocket {
                         try {
                             callback(msg.event.data);
                         } catch (e) {
-                            console.error('[RoomPanel] WS callback failed:', e.message);
+                            console.error('[HAControlPanel] WS callback failed:', e.message);
                         }
                     }
                 }
@@ -185,7 +185,7 @@ export class HaWebSocket {
         try {
             this._ws.send_text(JSON.stringify(obj));
         } catch (e) {
-            console.error('[RoomPanel] WS send failed:', e.message);
+            console.error('[HAControlPanel] WS send failed:', e.message);
         }
     }
 
