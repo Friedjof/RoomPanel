@@ -41,7 +41,7 @@ function quoteString(str) {
 
 function serializeArray(arr, indent) {
     if (arr.length === 0)
-        return '[]';
+        return ' []';
 
     const pad = ' '.repeat(indent + 2);
     const lines = arr.map(item => {
@@ -248,6 +248,8 @@ function parseScalar(str) {
     if (str === 'null' || str === '~') return null;
     if (str === 'true') return true;
     if (str === 'false') return false;
+    if (str === '[]') return [];
+    if (str === '{}') return {};
 
     // Quoted string
     if ((str.startsWith('"') && str.endsWith('"')) ||
