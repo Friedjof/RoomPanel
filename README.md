@@ -69,14 +69,6 @@ hacontrolpanel@friedjof.github.io/
 
 Useful commands:
 
-```bash
-make install
-make reinstall
-make pack
-make run
-make log
-```
-
 - `make install` compiles schemas and copies the extension into the local GNOME Shell extensions directory
 - `make reinstall` removes and installs again
 - `make pack` creates `dist/hacontrolpanel@friedjof.github.io.shell-extension.zip`
