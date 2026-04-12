@@ -42,6 +42,68 @@
       <description>Service data attribute for color, e.g. rgb_color</description>
     </key>
 
+    <!-- Screen Sync -->
+    <key name="screen-sync-enabled" type="b">
+      <default>false</default>
+      <summary>Enable Screen Sync</summary>
+      <description>Periodically sample the screen and send the resulting RGB color to a Home Assistant light entity</description>
+    </key>
+    <key name="screen-sync-entity" type="s">
+      <default>""</default>
+      <summary>Screen Sync Target Entity</summary>
+      <description>Home Assistant light entity to control with screen sync</description>
+    </key>
+    <key name="screen-sync-interval" type="d">
+      <default>2.0</default>
+      <summary>Screen Sync Interval</summary>
+      <description>Seconds between screen color samples</description>
+    </key>
+    <key name="screen-sync-mode" type="s">
+      <default>"dominant"</default>
+      <summary>Screen Sync Color Mode</summary>
+      <description>How to derive the color from sampled screen pixels: dominant or average</description>
+    </key>
+    <key name="screen-sync-scope" type="s">
+      <default>"primary"</default>
+      <summary>Screen Sync Scope</summary>
+      <description>Whether to sample the primary monitor or the whole stage</description>
+    </key>
+    <key name="screen-sync-preview-request" type="i">
+      <default>0</default>
+      <summary>Screen Sync Preview Request</summary>
+      <description>Transient nonce used by the preferences dialog to request a preview sample from the shell extension</description>
+    </key>
+    <key name="screen-sync-preview-response" type="i">
+      <default>0</default>
+      <summary>Screen Sync Preview Response</summary>
+      <description>Transient nonce written by the shell extension after finishing a preview sample</description>
+    </key>
+    <key name="screen-sync-preview-dominant" type="s">
+      <default>""</default>
+      <summary>Screen Sync Preview Dominant Color</summary>
+      <description>Transient preview result for the dominant screen color as a hex string</description>
+    </key>
+    <key name="screen-sync-preview-average" type="s">
+      <default>""</default>
+      <summary>Screen Sync Preview Average Color</summary>
+      <description>Transient preview result for the average screen color as a hex string</description>
+    </key>
+    <key name="screen-sync-preview-vibrant" type="s">
+      <default>""</default>
+      <summary>Screen Sync Preview Vibrant Color</summary>
+      <description>Transient preview result for the vibrant screen color as a hex string</description>
+    </key>
+    <key name="screen-sync-preview-accent" type="s">
+      <default>""</default>
+      <summary>Screen Sync Preview Accent Color</summary>
+      <description>Transient preview result for the accent screen color as a hex string</description>
+    </key>
+    <key name="screen-sync-preview-error" type="s">
+      <default>""</default>
+      <summary>Screen Sync Preview Error</summary>
+      <description>Transient preview error message written by the shell extension</description>
+    </key>
+
     <!-- Slider -->
     <key name="slider-entities-config" type="s">
       <default>"[]"</default>

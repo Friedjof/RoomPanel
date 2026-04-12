@@ -27,6 +27,13 @@ export function settingsToObject(settings) {
                 service: settings.get_string('color-service'),
                 attribute: settings.get_string('color-attribute'),
             },
+            screen_sync: {
+                enabled: settings.get_boolean('screen-sync-enabled'),
+                entity: settings.get_string('screen-sync-entity'),
+                interval: settings.get_double('screen-sync-interval'),
+                mode: settings.get_string('screen-sync-mode'),
+                scope: settings.get_string('screen-sync-scope'),
+            },
             slider: {
                 entities: readSliderConfigs(settings),
             },
