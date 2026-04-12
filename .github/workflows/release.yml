@@ -16,8 +16,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Package extension and upload to extensions.gnome.org
-        id: ego
+      - name: Build extension ZIP
+        run: |
+          mkdir -p dist
+          cd hacontrolpanel@friedjof.github.io
+          zip -r ../dist/hacontrolpanel@friedjof.github.io.shell-extension.zip \
+            extension.js prefs.js stylesheet.js metadata.json \
+            lib/ ui/ prefs/ schemas/
+        continue-on-error: false
+
+      - name: Upload to extensions.gnome.org
         uses: murar8/gnome-extensions-action@0.1.1
         with:
           source-dir: ./hacontrolpanel@friedjof.github.io
@@ -32,7 +40,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" "${{ steps.ego.outputs.zip-file }}" \
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/hacontrolpanel@friedjof.github.io.shell-extension.zip \
             --repo "${GITHUB_REPOSITORY}" \
             --title "HAControlPanel ${GITHUB_REF_NAME}" \
             --generate-notes \
