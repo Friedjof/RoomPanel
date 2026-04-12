@@ -4,5 +4,6 @@ dist/
 *.log
 *.swp
 *.zip
+*.compiled
 
 .DS_Store
