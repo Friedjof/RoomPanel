@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Build extension ZIP
         run: |
@@ -39,9 +41,56 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          ZIP_NAME="hacontrolpanel@friedjof.github.io-${GITHUB_REF_NAME}.shell-extension.zip"
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "${PREV_TAG}..HEAD" --oneline | sed 's/^/- /')
+            RANGE_HINT="since \`${PREV_TAG}\`"
+          else
+            CHANGES=$(git log --oneline | head -20 | sed 's/^/- /')
+            RANGE_HINT="(initial release)"
+          fi
+
+          LAST_3=$(git log -3 --pretty=format:"- **%s** (\`%h\`) — %an")
+
+          {
+            echo "## What's changed ${RANGE_HINT}"
+            echo ""
+            echo "${CHANGES}"
+            echo ""
+            echo "### Last 3 commits"
+            echo ""
+            echo "${LAST_3}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "1. Download \`${ZIP_NAME}\` below"
+            echo "2. Install the extension:"
+            echo '   ```bash'
+            echo "   gnome-extensions install ${ZIP_NAME}"
+            echo '   ```'
+            echo "3. Enable the extension:"
+            echo '   ```bash'
+            echo "   gnome-extensions enable hacontrolpanel@friedjof.github.io"
+            echo '   ```'
+            echo "4. Log out and log back in (required on Wayland)"
+            echo ""
+            echo "## Update (existing installation)"
+            echo ""
+            echo "1. Download \`${ZIP_NAME}\` below"
+            echo "2. Overwrite the existing installation:"
+            echo '   ```bash'
+            echo "   gnome-extensions install --force ${ZIP_NAME}"
+            echo '   ```'
+            echo "3. Log out and log back in to apply the update"
+          } > /tmp/release_notes.md
+
           gh release create "${GITHUB_REF_NAME}" \
-            dist/hacontrolpanel@friedjof.github.io-${GITHUB_REF_NAME}.shell-extension.zip \
+            "dist/${ZIP_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "HAControlPanel ${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --notes-file /tmp/release_notes.md \
             --verify-tag
