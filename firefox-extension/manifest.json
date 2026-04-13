@@ -5,7 +5,8 @@
   "description": "Syncs YouTube video colors to the HAControlPanel GNOME extension in real-time.",
 
   "host_permissions": [
-    "*://www.youtube.com/*"
+    "*://www.youtube.com/*",
+    "*://localhost/*"
   ],
 
   "permissions": [
@@ -14,6 +15,10 @@
 
   "background": {
     "scripts": ["background.js"]
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; connect-src ws://localhost:7842; object-src 'none'"
   },
 
   "content_scripts": [
