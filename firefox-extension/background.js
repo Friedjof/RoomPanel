@@ -22,6 +22,14 @@ let lastColor = null;      // last color received from active YT tab
 let currentTabs = [];      // current list of open YT tabs
 let lastFrameTabId = null;
 const tabColorState = new Map();
+let lastSamplerState = {
+    tabId: null,
+    samplingMode: null,
+    canvasBackend: null,
+    lastError: null,
+    lastErrorCode: null,
+    lastErrorAt: null,
+};
 
 function colorToHex(color) {
     if (!color)
@@ -37,10 +45,57 @@ function updateTabColor(tabId, color) {
     const now = Date.now();
     const prev = tabColorState.get(tabId) ?? { framesSeen: 0 };
     tabColorState.set(tabId, {
+        ...prev,
         lastColor: colorToHex(color),
         lastFrameAt: now,
         framesSeen: prev.framesSeen + 1,
+        lastError: null,
+        lastErrorCode: null,
+        lastErrorAt: null,
     });
+
+    lastSamplerState = {
+        ...lastSamplerState,
+        tabId,
+        samplingMode: prev.samplingMode ?? lastSamplerState.samplingMode,
+        canvasBackend: prev.canvasBackend ?? lastSamplerState.canvasBackend,
+        lastError: null,
+        lastErrorCode: null,
+        lastErrorAt: null,
+    };
+}
+
+function updateTabSamplerState(tabId, { samplingMode, canvasBackend, error } = {}) {
+    if (tabId === null || tabId === undefined)
+        return;
+
+    const prev = tabColorState.get(tabId) ?? { framesSeen: 0 };
+    const next = { ...prev };
+
+    if (samplingMode !== undefined)
+        next.samplingMode = samplingMode;
+    if (canvasBackend !== undefined)
+        next.canvasBackend = canvasBackend;
+
+    if (error === null) {
+        next.lastError = null;
+        next.lastErrorCode = null;
+        next.lastErrorAt = null;
+    } else if (error) {
+        next.lastError = error.message ?? 'Unknown sampler error';
+        next.lastErrorCode = error.code ?? 'unknown';
+        next.lastErrorAt = error.at ?? Date.now();
+    }
+
+    tabColorState.set(tabId, next);
+    lastSamplerState = {
+        tabId,
+        samplingMode: next.samplingMode ?? null,
+        canvasBackend: next.canvasBackend ?? null,
+        lastError: next.lastError ?? null,
+        lastErrorCode: next.lastErrorCode ?? null,
+        lastErrorAt: next.lastErrorAt ?? null,
+    };
 }
 
 function syncTabDiagnostics(tabs) {
@@ -61,6 +116,11 @@ function syncTabDiagnostics(tabs) {
             framesSeen: diagnostics.framesSeen ?? 0,
             frameFresh: lastFrameAt !== null && (now - lastFrameAt) <= FRAME_STALE_MS,
             selected: selectedTab !== 'auto' && String(selectedTab) === String(tab.tabId),
+            lastError: diagnostics.lastError ?? null,
+            lastErrorCode: diagnostics.lastErrorCode ?? null,
+            lastErrorAt: diagnostics.lastErrorAt ?? null,
+            samplingMode: diagnostics.samplingMode ?? null,
+            canvasBackend: diagnostics.canvasBackend ?? null,
         };
     });
 }
@@ -150,6 +210,11 @@ browser.runtime.onMessage.addListener((msg, sender) => {
         const tabId = sender.tab?.id ?? null;
         lastColor = colorToHex(msg.color);
         lastFrameTabId = tabId;
+        updateTabSamplerState(tabId, {
+            samplingMode: msg.samplingMode,
+            canvasBackend: msg.canvasBackend,
+            error: null,
+        });
         updateTabColor(tabId, msg.color);
         syncTabDiagnostics(currentTabs.map(({ tabId, title, active }) => ({ tabId, title, active })));
         send({
@@ -163,6 +228,17 @@ browser.runtime.onMessage.addListener((msg, sender) => {
         broadcastTabStatus();
     }
 
+    if (msg.type === 'samplerStatus') {
+        const tabId = sender.tab?.id ?? null;
+        const hasExplicitError = Object.prototype.hasOwnProperty.call(msg, 'error');
+        updateTabSamplerState(tabId, {
+            samplingMode: msg.samplingMode,
+            canvasBackend: msg.canvasBackend,
+            error: hasExplicitError ? msg.error : undefined,
+        });
+        syncTabDiagnostics(currentTabs.map(({ tabId, title, active }) => ({ tabId, title, active })));
+    }
+
     // Popup requests current state
     if (msg.type === 'getState') {
         return Promise.resolve({
@@ -171,6 +247,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
             lastColor,
             lastFrameTabId,
             selectedTab,
+            lastSamplerState,
         });
     }
 });

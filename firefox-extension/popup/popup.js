@@ -12,6 +12,8 @@ const ytStatus   = document.getElementById('ytStatus');
 const colorSwatch = document.getElementById('colorSwatch');
 const colorValue  = document.getElementById('colorValue');
 const selectedSource = document.getElementById('selectedSource');
+const frameDot = document.getElementById('frameDot');
+const frameStatus = document.getElementById('frameStatus');
 const tabList = document.getElementById('tabList');
 
 function trimTitle(title) {
@@ -38,6 +40,82 @@ function makeBadge(label, className) {
     badge.className = `badge ${className}`;
     badge.textContent = label;
     return badge;
+}
+
+function samplerBackendLabel(state) {
+    const parts = [];
+    if (state?.canvasBackend === 'offscreen')
+        parts.push('OffscreenCanvas');
+    else if (state?.canvasBackend === 'dom')
+        parts.push('Canvas');
+
+    if (state?.samplingMode === 'video-frame')
+        parts.push('rVFC');
+    else if (state?.samplingMode === 'animation-frame')
+        parts.push('rAF');
+
+    return parts.join(' / ');
+}
+
+function findPreferredTab(tabs, selectedTab) {
+    if (selectedTab === 'auto')
+        return tabs.find(tab => tab.active) ?? null;
+
+    return tabs.find(tab => String(tab.tabId) === String(selectedTab)) ?? null;
+}
+
+function summarizeSamplerError(state, tabs, preferredTab) {
+    const candidates = [
+        preferredTab,
+        tabs.find(tab => tab.lastError),
+    ].filter(Boolean);
+
+    const issue = candidates.find(tab => tab.lastError);
+    if (issue) {
+        if (issue.lastErrorCode === 'canvas-security')
+            return 'Canvas readback blocked';
+        if (issue.lastErrorCode === 'canvas-unavailable')
+            return 'Canvas backend unavailable';
+        if (issue.lastErrorCode === 'video-not-ready')
+            return 'Video not ready yet';
+        return issue.lastError;
+    }
+
+    if (state?.lastSamplerState?.lastError)
+        return state.lastSamplerState.lastError;
+
+    return null;
+}
+
+function updateFrameStatus(state, tabs, preferredTab) {
+    const backend = samplerBackendLabel(state?.lastSamplerState);
+    const freshTab = tabs.find(tab => tab.frameFresh);
+    const error = summarizeSamplerError(state, tabs, preferredTab);
+
+    if (error) {
+        frameDot.className = 'dot dot-red';
+        frameStatus.textContent = backend ? `${error} · ${backend}` : error;
+        frameStatus.title = state?.lastSamplerState?.lastError ?? error;
+        return;
+    }
+
+    if (freshTab) {
+        frameDot.className = 'dot dot-green';
+        frameStatus.textContent = backend ? `Streaming · ${backend}` : 'Streaming';
+        frameStatus.title = freshTab.lastColor ?? frameStatus.textContent;
+        return;
+    }
+
+    if (tabs.length > 0) {
+        frameDot.className = 'dot dot-yellow';
+        frameStatus.textContent = backend ? `Waiting · ${backend}` : 'Waiting for frames';
+        frameStatus.title = frameStatus.textContent;
+        return;
+    }
+
+    frameDot.className = 'dot dot-gray';
+    frameStatus.textContent = 'No sampler activity';
+    frameStatus.title = frameStatus.textContent;
 }
 
 function renderTabs(tabs, selectedTab) {
@@ -86,7 +164,9 @@ function renderTabs(tabs, selectedTab) {
             meta.append(makeBadge('Selected', 'badge-green'));
         if (selectedTab === 'auto' && tab.active)
             meta.append(makeBadge('Auto', 'badge-green'));
-        if (tab.frameFresh)
+        if (tab.lastError)
+            meta.append(makeBadge('Sampler Error', 'badge-red'));
+        else if (tab.frameFresh)
             meta.append(makeBadge('Streaming', 'badge-yellow'));
         else if (tab.framesSeen > 0)
             meta.append(makeBadge('Idle', 'badge-gray'));
@@ -94,6 +174,8 @@ function renderTabs(tabs, selectedTab) {
             meta.append(makeBadge('No Frames', 'badge-gray'));
         main.append(meta);
         card.append(main);
+        if (tab.lastError)
+            card.title = tab.lastError;
 
         const side = document.createElement('div');
         side.className = 'tab-side';
@@ -169,6 +251,7 @@ async function refresh() {
             : `Tab ${state.selectedTab}`;
     }
 
+    updateFrameStatus(state, tabs, findPreferredTab(tabs, state.selectedTab));
     renderTabs(tabs, state.selectedTab);
 }
 
