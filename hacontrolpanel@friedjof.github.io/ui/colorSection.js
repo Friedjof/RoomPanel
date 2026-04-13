@@ -290,6 +290,71 @@ export class ColorSection {
         this._rebuildChips();
         this._rebuildColorHistory();
         this._updateScreenSyncToggle();
+
+        // ── Browser Bridge YouTube Sync ──────────────────────────────────
+        this._buildBrowserBridgeRow(colorBox);
+    }
+
+    _buildBrowserBridgeRow(colorBox) {
+        // Wrapper — hidden until Firefox extension is connected
+        this._browserSyncBox = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            style_class: 'roompanel-browser-sync-box',
+            visible: false,
+        });
+        colorBox.add_child(this._browserSyncBox);
+
+        // Header row: label + mode toggles
+        const headerRow = new St.BoxLayout({
+            vertical: false,
+            x_expand: true,
+            style_class: 'roompanel-browser-sync-header',
+        });
+        this._browserSyncBox.add_child(headerRow);
+
+        headerRow.add_child(new St.Label({
+            text: 'YT Input',
+            style_class: 'roompanel-browser-sync-label',
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+        }));
+
+        // Smart mode button
+        this._bridgeSmartBtn = new St.Button({
+            label: 'Smart',
+            style_class: 'button roompanel-bridge-mode-btn',
+            can_focus: true,
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._bridgeSmartBtn.connect('clicked', () => {
+            this._settings.set_string('browser-bridge-mode', 'smart');
+        });
+        headerRow.add_child(this._bridgeSmartBtn);
+
+        // YT-only mode button
+        this._bridgeYtOnlyBtn = new St.Button({
+            label: 'Only YT',
+            style_class: 'button roompanel-bridge-mode-btn',
+            can_focus: true,
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._bridgeYtOnlyBtn.connect('clicked', () => {
+            this._settings.set_string('browser-bridge-mode', 'yt-only');
+        });
+        headerRow.add_child(this._bridgeYtOnlyBtn);
+
+        // Tab chips row (auto + one per open YT tab)
+        this._bridgeTabRow = new St.BoxLayout({
+            vertical: false,
+            x_expand: true,
+            style_class: 'roompanel-bridge-tab-row',
+        });
+        this._browserSyncBox.add_child(this._bridgeTabRow);
+
+        this._updateBrowserBridgeUI();
     }
 
     _connectSettings() {
@@ -307,9 +372,76 @@ export class ColorSection {
 
             if (key === 'screen-sync-enabled' || key === 'screen-sync-entities')
                 this._updateScreenSyncToggle();
+
+            if (['browser-bridge-connected', 'browser-bridge-mode',
+                'browser-bridge-tab', 'browser-bridge-tab-list'].includes(key))
+                this._updateBrowserBridgeUI();
         });
 
         this._menuItem.visible = this._settings.get_strv('color-entities').some(Boolean);
+    }
+
+    _updateBrowserBridgeUI() {
+        if (!this._browserSyncBox)
+            return;
+
+        const connected = this._settings.get_boolean('browser-bridge-connected');
+        this._browserSyncBox.visible = connected;
+
+        if (!connected)
+            return;
+
+        // Mode toggles
+        const mode = this._settings.get_string('browser-bridge-mode');
+        if (mode === 'yt-only') {
+            this._bridgeSmartBtn.remove_style_class_name('roompanel-bridge-mode-btn-active');
+            this._bridgeYtOnlyBtn.add_style_class_name('roompanel-bridge-mode-btn-active');
+        } else {
+            this._bridgeSmartBtn.add_style_class_name('roompanel-bridge-mode-btn-active');
+            this._bridgeYtOnlyBtn.remove_style_class_name('roompanel-bridge-mode-btn-active');
+        }
+
+        // Tab chips — rebuild from current tab list
+        const children = this._bridgeTabRow.get_children();
+        for (const child of children)
+            this._bridgeTabRow.remove_child(child);
+
+        let tabs = [];
+        try { tabs = JSON.parse(this._settings.get_string('browser-bridge-tab-list')); } catch {}
+
+        const selectedTab = this._settings.get_string('browser-bridge-tab');
+
+        // "Auto" chip is always first
+        const autoChip = new St.Button({
+            label: 'Auto',
+            style_class: 'roompanel-chip' + (selectedTab === 'auto' ? ' roompanel-chip-active' : ''),
+            can_focus: true,
+            reactive: true,
+        });
+        autoChip.connect('clicked', () =>
+            this._settings.set_string('browser-bridge-tab', 'auto'));
+        this._bridgeTabRow.add_child(autoChip);
+
+        // One chip per open YT tab
+        for (const tab of tabs) {
+            const tabIdStr = String(tab.tabId);
+            const isSelected = selectedTab === tabIdStr;
+            // Shorten long titles
+            const label = (tab.title ?? tabIdStr).replace(/ [-–|].*YouTube.*$/, '').trim().slice(0, 20);
+            const chip = new St.Button({
+                label,
+                style_class: 'roompanel-chip' + (isSelected ? ' roompanel-chip-active' : ''),
+                can_focus: true,
+                reactive: true,
+                x_expand: true,
+            });
+            chip.tooltip_text = tab.title ?? tabIdStr;
+            chip.connect('clicked', () =>
+                this._settings.set_string('browser-bridge-tab', tabIdStr));
+            this._bridgeTabRow.add_child(chip);
+        }
+
+        this._bridgeTabRow.visible = tabs.length > 0;
     }
 
     // ── Color state ──────────────────────────────────────────────────────────

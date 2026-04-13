@@ -544,6 +544,7 @@ export class ScreenSyncController {
         this._interpolatorState = this._interpolator.createState?.() ?? {};
         this._lastSentColor = null;
         this._lastError = '';
+        this._ytActive = false;
         this._condition = normalizeScreenSyncCondition({});
         this._conditionSatisfied = true;
         this._conditionStateKnown = true;
@@ -598,6 +599,38 @@ export class ScreenSyncController {
             this._outputSourceId = null;
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Browser Bridge API
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called by the BrowserBridgeServer when a new video frame color arrives.
+     * Pushes the color into the rolling history so the existing output pipeline
+     * (interpolation, threshold, throttle) can pick it up.
+     *
+     * @param {number} r
+     * @param {number} g
+     * @param {number} b
+     */
+    pushExternalColor(r, g, b) {
+        this._ytActive = true;
+        this._colorHistory.push({ color: [r, g, b], time: Date.now() });
+        const maxHistory = getInterpolatorHistorySize(this._interpolator, this._settings);
+        if (this._colorHistory.length > maxHistory)
+            this._colorHistory.splice(0, this._colorHistory.length - maxHistory);
+    }
+
+    /**
+     * Called by the BrowserBridgeServer when no YouTube tab is active.
+     * In smart mode the next _tick() will fall through to screen sampling;
+     * in yt-only mode _tick() returns early, keeping the last sent color.
+     */
+    setYTInactive() {
+        this._ytActive = false;
+    }
+
+    // -------------------------------------------------------------------------
 
     _handleIdentifyRequest() {
         const requestId = this._settings.get_int('screen-sync-identify-request');
@@ -841,6 +874,15 @@ export class ScreenSyncController {
     async _tick() {
         if (this._running || !this._shouldRun())
             return;
+
+        // When scope is 'browser', skip screen sampling while YT is actively providing
+        // colors. In yt-only mode always skip (hold last color); in smart mode fall
+        // through to screen sampling as a fallback when YT is inactive.
+        const scope = this._settings.get_string('screen-sync-scope');
+        if (scope === 'browser') {
+            if (this._ytActive || this._settings.get_string('browser-bridge-mode') === 'yt-only')
+                return;
+        }
 
         this._running = true;
 

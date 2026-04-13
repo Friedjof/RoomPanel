@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HAControlPanel Bridge</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      min-width: 240px;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 12px;
+    }
+
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cba6f7;
+      margin-bottom: 10px;
+      letter-spacing: 0.03em;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid #313244;
+    }
+    .row:last-child { border-bottom: none; }
+
+    .label {
+      flex: 1;
+      color: #a6adc8;
+      font-size: 12px;
+    }
+
+    .value {
+      font-size: 12px;
+      color: #cdd6f4;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-green  { background: #a6e3a1; }
+    .dot-red    { background: #f38ba8; }
+    .dot-yellow { background: #f9e2af; }
+    .dot-gray   { background: #585b70; }
+
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid #313244;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>HAControlPanel Bridge</h1>
+
+  <div class="row">
+    <span class="dot" id="connDot"></span>
+    <span class="label">GNOME Extension</span>
+    <span class="value" id="connStatus">–</span>
+  </div>
+
+  <div class="row">
+    <span class="dot" id="ytDot"></span>
+    <span class="label">YouTube Tabs</span>
+    <span class="value" id="ytStatus">–</span>
+  </div>
+
+  <div class="row">
+    <span class="swatch" id="colorSwatch"></span>
+    <span class="label">Last Color</span>
+    <span class="value" id="colorValue">–</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
