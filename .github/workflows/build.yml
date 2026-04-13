@@ -42,9 +42,11 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ matrix.needs_node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version: 24
+          check-latest: false
+          package-manager-cache: false
 
       - name: Install build dependencies
         if: ${{ matrix.needs_glib }}
