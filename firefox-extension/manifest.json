@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HAControlPanel Bridge",
-  "version": "0.11.0",
+  "version": "0.1.0",
   "description": "Syncs YouTube video colors to the HAControlPanel GNOME extension in real-time.",
 
   "host_permissions": [
