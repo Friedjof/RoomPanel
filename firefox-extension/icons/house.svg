@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="House">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f9d66b"/>
+      <stop offset="1" stop-color="#f39b3d"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#db5a43"/>
+      <stop offset="1" stop-color="#b93c2d"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#bg)"/>
+  <path d="M14 31.5 32 16l18 15.5v3.5a2 2 0 0 1-2 2h-4v11a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4V37h-4a2 2 0 0 1-2-2z" fill="url(#roof)"/>
+  <path d="M20 33.5 32 23l12 10.5V48a2 2 0 0 1-2 2h-7V39a3 3 0 0 0-3-3 3 3 0 0 0-3 3v11h-7a2 2 0 0 1-2-2z" fill="#fff7e8"/>
+  <path d="M29 50V39a3 3 0 0 1 6 0v11z" fill="#7d4b2f"/>
+  <rect x="24" y="34" width="6" height="6" rx="1.5" fill="#8fd3ff"/>
+  <rect x="34" y="34" width="6" height="6" rx="1.5" fill="#8fd3ff"/>
+</svg>

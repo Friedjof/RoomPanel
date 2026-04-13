@@ -115,6 +115,9 @@ function checkScreenSync(ss, errors, warnings) {
     if (ss.scope !== undefined && !isScreenSyncScope(String(ss.scope)))
         errors.push(`panel.screen_sync.scope: "${ss.scope}" is not valid — use one of: ${[...VALID_SYNC_SCOPES].join(', ')}, or monitor-N`);
 
+    if (ss.browser_bridge_priority !== undefined && !isBool(ss.browser_bridge_priority))
+        warnings.push('panel.screen_sync.browser_bridge_priority should be a boolean');
+
     if (ss.transition !== undefined && !VALID_SYNC_TRANSITIONS.has(String(ss.transition)))
         errors.push(`panel.screen_sync.transition: "${ss.transition}" is not valid — use one of: ${[...VALID_SYNC_TRANSITIONS].join(', ')}`);
 

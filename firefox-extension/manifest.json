@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "HAControlPanel Bridge",
+  "version": "0.1.0",
+  "description": "Syncs YouTube video colors to the HAControlPanel GNOME extension in real-time.",
+
+  "host_permissions": [
+    "*://www.youtube.com/*",
+    "*://localhost/*"
+  ],
+
+  "permissions": [
+    "tabs"
+  ],
+
+  "icons": {
+    "16": "icons/house.svg",
+    "32": "icons/house.svg",
+    "48": "icons/house.svg",
+    "96": "icons/house.svg"
+  },
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; connect-src ws://localhost:7842; object-src 'none'"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["content/youtube.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_icon": {
+      "16": "icons/house.svg",
+      "32": "icons/house.svg"
+    },
+    "default_popup": "popup/popup.html",
+    "default_title": "HAControlPanel Bridge"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "hacontrolpanel-bridge@friedjof.github.io",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["websiteContent"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}

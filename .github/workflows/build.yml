@@ -1,4 +1,4 @@
-name: Build Extension
+name: Build Extensions
 
 on:
   push:
@@ -12,28 +12,134 @@ permissions:
 
 jobs:
   build:
+    name: ${{ matrix.artifact_prefix }}
     runs-on: ubuntu-24.04
-
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - artifact_prefix: hacontrolpanel-shell-extension
+            target: pack
+            bundle_path: dist/hacontrolpanel@friedjof.github.io.shell-extension.zip
+            renamed_prefix: dist/hacontrolpanel@friedjof.github.io
+            renamed_suffix: .shell-extension.zip
+            needs_glib: true
+            needs_node: false
+            sign_firefox: false
+          - artifact_prefix: hacontrolpanel-firefox-extension
+            renamed_prefix: dist/hacontrolpanel-bridge
+            renamed_suffix: .firefox-extension.xpi
+            needs_glib: false
+            needs_node: true
+            sign_firefox: true
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Capture short commit hash
+        id: meta
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Node.js
+        if: ${{ matrix.needs_node }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          check-latest: false
+          package-manager-cache: false
+
       - name: Install build dependencies
+        if: ${{ matrix.needs_glib }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y libglib2.0-bin zip
+          sudo apt-get install -y libglib2.0-bin
 
-      - name: Build extension bundle
-        run: make pack
+      - name: Build GNOME extension bundle
+        if: ${{ !matrix.sign_firefox }}
+        run: make ${{ matrix.target }}
+
+      - name: Build Firefox Browser Bridge bundle
+        if: ${{ matrix.sign_firefox }}
+        id: firefox
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -n "${WEB_EXT_API_KEY}" ] && [ -n "${WEB_EXT_API_SECRET}" ]; then
+            BASE_VERSION=$(node -p "require('./firefox-extension/manifest.json').version")
+            CI_VERSION=$(node -e '
+              const base = process.argv[1];
+              const runNumber = Number(process.argv[2]);
+              const runAttempt = Number(process.argv[3]);
+              let parts = base.split(".").map(Number);
+              if (!Number.isInteger(runNumber) || runNumber <= 0)
+                process.exit(1);
+              if (!Number.isInteger(runAttempt) || runAttempt <= 0)
+                process.exit(1);
+              if (parts.some(n => !Number.isInteger(n) || n < 0))
+                process.exit(1);
+              while (parts.length < 3)
+                parts.push(0);
+              parts = parts.slice(0, 4);
+              const ciBuild = runNumber * 100 + runAttempt;
+              if (ciBuild > 999999999)
+                process.exit(1);
+              if (parts.length < 4)
+                parts.push(ciBuild);
+              else
+                parts[3] = ciBuild;
+              console.log(parts.join("."));
+            ' "${BASE_VERSION}" "${GITHUB_RUN_NUMBER}" "${GITHUB_RUN_ATTEMPT}")
+
+            mkdir -p dist
+            rm -rf dist/firefox-extension-sign
+            rm -f dist/*.xpi
+            cp -R firefox-extension dist/firefox-extension-sign
+            node -e '
+              const fs = require("fs");
+              const path = "dist/firefox-extension-sign/manifest.json";
+              const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+              manifest.version = process.argv[1];
+              fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+            ' "${CI_VERSION}"
+
+            npx --yes web-ext@8 sign \
+              --channel=unlisted \
+              --source-dir=dist/firefox-extension-sign \
+              --artifacts-dir=dist
+            bundle="$(find dist -maxdepth 1 -type f -name '*.xpi' | head -n1)"
+            if [ -z "${bundle}" ]; then
+              echo "Signed Firefox .xpi not found" >&2
+              exit 1
+            fi
+            echo "signed=true" >> "${GITHUB_OUTPUT}"
+            echo "signed_version=${CI_VERSION}" >> "${GITHUB_OUTPUT}"
+          else
+            make pack-firefox
+            bundle="dist/hacontrolpanel-bridge.firefox-extension.xpi"
+            echo "signed=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          echo "bundle_path=${bundle}" >> "${GITHUB_OUTPUT}"
 
       - name: Append commit hash to bundle name
         id: bundle
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          bundle="dist/hacontrolpanel@friedjof.github.io.shell-extension.zip"
-          renamed_bundle="dist/hacontrolpanel@friedjof.github.io-${short_sha}.shell-extension.zip"
+          short_sha="${{ steps.meta.outputs.short_sha }}"
+          if [ "${{ matrix.sign_firefox }}" = "true" ]; then
+            bundle="${{ steps.firefox.outputs.bundle_path }}"
+          else
+            bundle="${{ matrix.bundle_path }}"
+          fi
+          renamed_bundle="${{ matrix.renamed_prefix }}-${short_sha}${{ matrix.renamed_suffix }}"
           mv "${bundle}" "${renamed_bundle}"
-          echo "artifact_name=hacontrolpanel-shell-extension-${short_sha}" >> "${GITHUB_OUTPUT}"
+          if [ "${{ matrix.sign_firefox }}" = "true" ] && [ "${{ steps.firefox.outputs.signed }}" = "true" ]; then
+            echo "artifact_name=${{ matrix.artifact_prefix }}-signed-${short_sha}" >> "${GITHUB_OUTPUT}"
+          elif [ "${{ matrix.sign_firefox }}" = "true" ]; then
+            echo "artifact_name=${{ matrix.artifact_prefix }}-unsigned-${short_sha}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "artifact_name=${{ matrix.artifact_prefix }}-${short_sha}" >> "${GITHUB_OUTPUT}"
+          fi
           echo "bundle_path=${renamed_bundle}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload extension bundle

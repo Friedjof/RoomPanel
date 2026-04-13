@@ -14,17 +14,85 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Build extension ZIP
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          check-latest: false
+          package-manager-cache: false
+
+      - name: Install build dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-bin
+
+      - name: Build GNOME extension bundle
+        run: |
+          make pack
+          mv dist/hacontrolpanel@friedjof.github.io.shell-extension.zip \
+            dist/hacontrolpanel@friedjof.github.io-${GITHUB_REF_NAME}.shell-extension.zip
+
+      - name: Sign Firefox Browser Bridge
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "${WEB_EXT_API_KEY}" ] || [ -z "${WEB_EXT_API_SECRET}" ]; then
+            echo "AMO signing secrets are missing" >&2
+            exit 1
+          fi
+
+          BASE_VERSION=$(node -p "require('./firefox-extension/manifest.json').version")
+          FIREFOX_SIGN_VERSION=$(node -e '
+            const base = process.argv[1];
+            const runNumber = Number(process.argv[2]);
+            const runAttempt = Number(process.argv[3]);
+            let parts = base.split(".").map(Number);
+            if (!Number.isInteger(runNumber) || runNumber <= 0)
+              process.exit(1);
+            if (!Number.isInteger(runAttempt) || runAttempt <= 0)
+              process.exit(1);
+            if (parts.some(n => !Number.isInteger(n) || n < 0))
+              process.exit(1);
+            while (parts.length < 3)
+              parts.push(0);
+            parts = parts.slice(0, 4);
+            const ciBuild = runNumber * 100 + runAttempt;
+            if (ciBuild > 999999999)
+              process.exit(1);
+            if (parts.length < 4)
+              parts.push(ciBuild);
+            else
+              parts[3] = ciBuild;
+            console.log(parts.join("."));
+          ' "${BASE_VERSION}" "${GITHUB_RUN_NUMBER}" "${GITHUB_RUN_ATTEMPT}")
+          echo "Signing Firefox add-on with internal version ${FIREFOX_SIGN_VERSION}"
+
           mkdir -p dist
-          cd hacontrolpanel@friedjof.github.io
-          zip -r ../dist/hacontrolpanel@friedjof.github.io-${GITHUB_REF_NAME}.shell-extension.zip \
-            extension.js prefs.js stylesheet.css metadata.json \
-            lib/ ui/ prefs/ schemas/
+          rm -rf dist/firefox-extension-sign
+          rm -f dist/*.xpi
+          cp -R firefox-extension dist/firefox-extension-sign
+          node -e '
+            const fs = require("fs");
+            const path = "dist/firefox-extension-sign/manifest.json";
+            const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+            manifest.version = process.argv[1];
+            fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+          ' "${FIREFOX_SIGN_VERSION}"
+
+          npx --yes web-ext@8 sign \
+            --channel=unlisted \
+            --source-dir=dist/firefox-extension-sign \
+            --artifacts-dir=dist
+
+          SIGNED_XPI=$(find dist -maxdepth 1 -type f -name '*.xpi' | head -n1)
+          test -n "${SIGNED_XPI}"
+          mv "${SIGNED_XPI}" \
+            "dist/hacontrolpanel-bridge-${GITHUB_REF_NAME}.firefox-extension.xpi"
 
       - name: Upload to extensions.gnome.org
         uses: murar8/gnome-extensions-action@0.1.1
@@ -42,6 +110,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ZIP_NAME="hacontrolpanel@friedjof.github.io-${GITHUB_REF_NAME}.shell-extension.zip"
+          FIREFOX_XPI="hacontrolpanel-bridge-${GITHUB_REF_NAME}.firefox-extension.xpi"
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -n "$PREV_TAG" ]; then
@@ -65,31 +134,60 @@ jobs:
             echo ""
             echo "---"
             echo ""
+            echo "## Release assets"
+            echo ""
+            echo "- \`${ZIP_NAME}\` — GNOME Shell extension bundle"
+            echo "- \`${FIREFOX_XPI}\` — signed Firefox Browser Bridge add-on"
+            echo ""
+            echo "Install the GNOME Shell extension if you want HAControlPanel itself."
+            echo "Install the Firefox add-on only if you want Browser Bridge / YouTube color sync."
+            echo ""
             echo "## Installation"
+            echo ""
+            echo "### GNOME Shell extension"
             echo ""
             echo "1. Download \`${ZIP_NAME}\` below"
             echo "2. Install the extension:"
             echo '   ```bash'
-            echo "   gnome-extensions install ${ZIP_NAME}"
+            echo "   gnome-extensions install --force ${ZIP_NAME}"
             echo '   ```'
             echo "3. Enable the extension:"
             echo '   ```bash'
             echo "   gnome-extensions enable hacontrolpanel@friedjof.github.io"
             echo '   ```'
-            echo "4. Log out and log back in (required on Wayland)"
+            echo "4. Log out and log back in if GNOME Shell does not pick up the new version immediately"
             echo ""
-            echo "## Update (existing installation)"
+            echo "### Firefox Browser Bridge"
             echo ""
-            echo "1. Download \`${ZIP_NAME}\` below"
+            echo "1. Download \`${FIREFOX_XPI}\` below"
+            echo "2. Open Firefox → Add-ons and Themes"
+            echo "3. Open the gear menu → \`Install Add-on From File…\`"
+            echo "4. Select the downloaded signed \`.xpi\`"
+            echo "5. Open HAControlPanel Preferences → Connection → enable *Browser Bridge*"
+            echo "6. Open HAControlPanel Preferences → Actions → enable *Firefox Browser Bridge* if Firefox should exclusively drive screen sync while connected"
+            echo "7. Open YouTube and verify that the Firefox popup shows *Connected*"
+            echo ""
+            echo "## Updating an existing installation"
+            echo ""
+            echo "### GNOME Shell extension update"
+            echo ""
+            echo "1. Download the newer \`${ZIP_NAME}\` asset"
             echo "2. Overwrite the existing installation:"
             echo '   ```bash'
             echo "   gnome-extensions install --force ${ZIP_NAME}"
             echo '   ```'
-            echo "3. Log out and log back in to apply the update"
+            echo "3. Re-enable or log out and back in if GNOME Shell still shows the old version"
+            echo ""
+            echo "### Firefox Browser Bridge update"
+            echo ""
+            echo "1. Download the newer \`${FIREFOX_XPI}\` asset"
+            echo "2. In Firefox, repeat *Install Add-on From File…* with the new `.xpi`"
+            echo "3. Firefox will update the existing add-on in place"
           } > /tmp/release_notes.md
 
           gh release create "${GITHUB_REF_NAME}" \
             "dist/${ZIP_NAME}" \
+            "dist/${FIREFOX_XPI}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "HAControlPanel ${GITHUB_REF_NAME}" \
             --notes-file /tmp/release_notes.md \

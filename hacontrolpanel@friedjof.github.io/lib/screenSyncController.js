@@ -26,6 +26,8 @@ const CONFIG_KEYS = new Set([
     'screen-sync-ema-time',
     'screen-sync-spring-stiffness',
     'screen-sync-spring-damping',
+    'browser-bridge-priority',
+    'browser-bridge-connected',
 ]);
 const CONNECTION_KEYS = new Set(['ha-url', 'ha-token', 'ha-verify-ssl']);
 
@@ -544,6 +546,7 @@ export class ScreenSyncController {
         this._interpolatorState = this._interpolator.createState?.() ?? {};
         this._lastSentColor = null;
         this._lastError = '';
+        this._ytActive = false;
         this._condition = normalizeScreenSyncCondition({});
         this._conditionSatisfied = true;
         this._conditionStateKnown = true;
@@ -597,6 +600,46 @@ export class ScreenSyncController {
             GLib.source_remove(this._outputSourceId);
             this._outputSourceId = null;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Browser Bridge API
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called by the BrowserBridgeServer when a new video frame color arrives.
+     * Pushes the color into the rolling history so the existing output pipeline
+     * (interpolation, threshold, throttle) can pick it up.
+     *
+     * @param {number} r
+     * @param {number} g
+     * @param {number} b
+     */
+    pushExternalColor(r, g, b) {
+        if (!this._shouldUseBrowserBridge())
+            return;
+
+        this._ytActive = true;
+        this._colorHistory.push({ color: [r, g, b], time: Date.now() });
+        const maxHistory = getInterpolatorHistorySize(this._interpolator, this._settings);
+        if (this._colorHistory.length > maxHistory)
+            this._colorHistory.splice(0, this._colorHistory.length - maxHistory);
+    }
+
+    /**
+     * Called by the BrowserBridgeServer when no YouTube tab is active.
+     * While the bridge stays connected, monitor sampling remains paused.
+     * Fallback to the configured screen source only happens after disconnect.
+     */
+    setYTInactive() {
+        this._ytActive = false;
+    }
+
+    // -------------------------------------------------------------------------
+
+    _shouldUseBrowserBridge() {
+        return this._settings.get_boolean('browser-bridge-priority') &&
+            this._settings.get_boolean('browser-bridge-connected');
     }
 
     _handleIdentifyRequest() {
@@ -840,6 +883,12 @@ export class ScreenSyncController {
     // to the rolling history used by the transition output loop.
     async _tick() {
         if (this._running || !this._shouldRun())
+            return;
+
+        // While the Browser Bridge is prioritised and connected, suppress
+        // monitor sampling entirely. Only a real disconnect re-enables the
+        // configured screen source.
+        if (this._shouldUseBrowserBridge())
             return;
 
         this._running = true;

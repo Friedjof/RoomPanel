@@ -1,5 +1,6 @@
 .claude/
 dist/
+__pycache__/
 
 *.log
 *.swp

@@ -69,7 +69,17 @@ function applyObjectToSettings(obj, settings) {
     );
     if (screenSync.interval !== undefined) settings.set_double('screen-sync-interval', Number(screenSync.interval) || 2.0);
     if (screenSync.mode !== undefined) settings.set_string('screen-sync-mode', String(screenSync.mode));
-    if (screenSync.scope !== undefined) settings.set_string('screen-sync-scope', String(screenSync.scope));
+    if (screenSync.scope !== undefined) {
+        const scope = String(screenSync.scope);
+        if (scope === 'browser') {
+            settings.set_string('screen-sync-scope', 'primary');
+            settings.set_boolean('browser-bridge-priority', true);
+        } else {
+            settings.set_string('screen-sync-scope', scope);
+        }
+    }
+    if (screenSync.browser_bridge_priority !== undefined)
+        settings.set_boolean('browser-bridge-priority', !!screenSync.browser_bridge_priority);
     if (screenSync.transition !== undefined) settings.set_string('screen-sync-transition', String(screenSync.transition));
     if (screenSync.output_interval !== undefined) settings.set_int('screen-sync-output-interval', Math.round(Number(screenSync.output_interval) || 500));
     if (screenSync.threshold !== undefined) settings.set_int('screen-sync-threshold', Math.round(Number(screenSync.threshold) || 18));

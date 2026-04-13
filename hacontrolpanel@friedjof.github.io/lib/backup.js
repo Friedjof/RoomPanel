@@ -15,6 +15,20 @@ export function getResolvedBackupPath(settings) {
     return configuredPath || getDefaultBackupPath();
 }
 
+function getScreenSyncBackupSettings(settings) {
+    if (settings.get_string('screen-sync-scope') === 'browser') {
+        return {
+            scope: 'primary',
+            browser_bridge_priority: true,
+        };
+    }
+
+    return {
+        scope: settings.get_string('screen-sync-scope'),
+        browser_bridge_priority: settings.get_boolean('browser-bridge-priority'),
+    };
+}
+
 export function settingsToObject(settings) {
     const screenSyncCondition = (() => {
         try {
@@ -37,6 +51,8 @@ export function settingsToObject(settings) {
         }
     })();
 
+    const screenSyncSettings = getScreenSyncBackupSettings(settings);
+
     return {
         connection: {
             url: settings.get_string('ha-url'),
@@ -54,7 +70,7 @@ export function settingsToObject(settings) {
                 ...(screenSyncCondition ? { condition: screenSyncCondition } : {}),
                 interval: settings.get_double('screen-sync-interval'),
                 mode: settings.get_string('screen-sync-mode'),
-                scope: settings.get_string('screen-sync-scope'),
+                ...screenSyncSettings,
                 transition: settings.get_string('screen-sync-transition'),
                 output_interval: settings.get_int('screen-sync-output-interval'),
                 threshold: settings.get_int('screen-sync-threshold'),

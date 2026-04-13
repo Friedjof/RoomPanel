@@ -3,6 +3,7 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { HaClient } from './lib/haClient.js';
 import { ScreenSyncController } from './lib/screenSyncController.js';
+import { BrowserBridgeServer } from './lib/browserBridgeServer.js';
 import { RoomPanelIndicator } from './ui/panelIndicator.js';
 import { serialize } from './lib/yaml.js';
 import { getResolvedBackupPath, settingsToObject } from './lib/backup.js';
@@ -13,15 +14,33 @@ export default class RoomPanelExtension extends Extension {
         this._haClient = new HaClient();
         this._indicator = null;
         this._screenSyncController = null;
+        this._browserBridge = null;
         this._settingsChangedId = null;
 
+        this._migrateLegacyBrowserBridgeSettings();
         this._applyCredentials();
         this._createIndicator();
         this._createScreenSyncController();
+        this._createBrowserBridge();
         this._setupAutoBackup();
 
         if (this._settings.get_boolean('auto-yaml-backup'))
             this._writeYamlBackup();
+    }
+
+    _clearBrowserBridgeTabState() {
+        this._settings.set_boolean('browser-bridge-connected', false);
+        this._settings.set_string('browser-bridge-tab-list', '[]');
+    }
+
+    _migrateLegacyBrowserBridgeSettings() {
+        if (this._settings.get_string('screen-sync-scope') !== 'browser')
+            return;
+
+        // The browser bridge no longer replaces the screen source directly.
+        // Keep the bridge active as an override and fall back to the default source.
+        this._settings.set_string('screen-sync-scope', 'primary');
+        this._settings.set_boolean('browser-bridge-priority', true);
     }
 
     _applyCredentials() {
@@ -43,6 +62,39 @@ export default class RoomPanelExtension extends Extension {
         this._screenSyncController = new ScreenSyncController(this._settings, this._haClient);
     }
 
+    _createBrowserBridge() {
+        this._bridgeColorPreviewTs = 0;
+        this._clearBrowserBridgeTabState();
+        const port = this._settings.get_int('browser-bridge-port');
+        this._browserBridge = new BrowserBridgeServer(port, {
+            onColor: (r, g, b) => {
+                this._screenSyncController?.pushExternalColor(r, g, b);
+                // Update preview color in settings at ~1fps so the prefs dialog can show it
+                const now = Date.now();
+                if (now - this._bridgeColorPreviewTs >= 1000) {
+                    this._bridgeColorPreviewTs = now;
+                    const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                    this._settings.set_string('browser-bridge-preview-color', hex);
+                }
+            },
+            onYTInactive: () => this._screenSyncController?.setYTInactive(),
+            onTabsChanged: tabs => {
+                this._settings.set_string('browser-bridge-tab-list', JSON.stringify(tabs));
+            },
+            onConnected: connected => {
+                if (!connected) {
+                    this._clearBrowserBridgeTabState();
+                    return;
+                }
+
+                this._settings.set_boolean('browser-bridge-connected', true);
+            },
+        });
+
+        if (this._settings.get_boolean('browser-bridge-enabled'))
+            this._browserBridge.start();
+    }
+
     async _openPreferencesSafely() {
         try {
             await this.openPreferences();
@@ -56,6 +108,20 @@ export default class RoomPanelExtension extends Extension {
             // Re-apply credentials when connection settings change
             if (['ha-url', 'ha-token', 'ha-verify-ssl'].includes(key))
                 this._applyCredentials();
+
+            // Browser bridge lifecycle
+            if (key === 'browser-bridge-enabled') {
+                if (settings.get_boolean('browser-bridge-enabled'))
+                    this._browserBridge?.start();
+                else {
+                    this._browserBridge?.stop();
+                    this._clearBrowserBridgeTabState();
+                }
+            }
+
+            // Propagate tab selection change to the bridge immediately
+            if (key === 'browser-bridge-tab')
+                this._browserBridge?.setSelectedTab(settings.get_string('browser-bridge-tab'));
 
             // Auto-backup
             if (settings.get_boolean('auto-yaml-backup'))
@@ -104,6 +170,14 @@ export default class RoomPanelExtension extends Extension {
             this._screenSyncController.destroy();
             this._screenSyncController = null;
         }
+
+        if (this._browserBridge) {
+            this._browserBridge.destroy();
+            this._browserBridge = null;
+        }
+
+        if (this._settings)
+            this._clearBrowserBridgeTabState();
 
         if (this._haClient) {
             this._haClient.destroy();

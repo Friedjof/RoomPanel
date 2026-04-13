@@ -154,6 +154,43 @@
       <description>Transient preview error message written by the shell extension</description>
     </key>
 
+    <!-- Browser Bridge -->
+    <key name="browser-bridge-enabled" type="b">
+      <default>false</default>
+      <summary>Browser Bridge Server aktivieren</summary>
+      <description>Startet einen lokalen WebSocket-Server, mit dem sich die HAControlPanel Firefox-Extension verbinden kann</description>
+    </key>
+    <key name="browser-bridge-port" type="i">
+      <default>7842</default>
+      <summary>Browser Bridge Port</summary>
+      <description>Lokaler Port auf dem der Browser Bridge WebSocket-Server lauscht</description>
+    </key>
+    <key name="browser-bridge-priority" type="b">
+      <default>false</default>
+      <summary>Browser Bridge priorisieren</summary>
+      <description>Wenn aktiv, überschreiben YouTube-Farben aus der Firefox Browser Bridge die aktuell gewählte Screen-Sync-Quelle solange die Firefox-Extension verbunden ist</description>
+    </key>
+    <key name="browser-bridge-tab" type="s">
+      <default>"auto"</default>
+      <summary>Browser Bridge Tab-Auswahl</summary>
+      <description>Ausgewählter YouTube-Tab: "auto" (immer der fokussierte Tab) oder eine Tab-ID als String</description>
+    </key>
+    <key name="browser-bridge-tab-list" type="s">
+      <default>"[]"</default>
+      <summary>Browser Bridge Tab-Liste</summary>
+      <description>Transient: JSON-Array mit aktiven YouTube-Tabs [{tabId, title, active}], wird von der Extension gesetzt</description>
+    </key>
+    <key name="browser-bridge-connected" type="b">
+      <default>false</default>
+      <summary>Browser Bridge Verbindungsstatus</summary>
+      <description>Transient: true wenn mindestens eine Firefox-Extension verbunden ist, wird von der Extension gesetzt</description>
+    </key>
+    <key name="browser-bridge-preview-color" type="s">
+      <default>""</default>
+      <summary>Browser Bridge Vorschau-Farbe</summary>
+      <description>Transient: zuletzt empfangene Farbe als Hex-String (#RRGGBB), wird von der Extension gesetzt (~1fps)</description>
+    </key>
+
     <!-- Slider -->
     <key name="slider-entities-config" type="s">
       <default>"[]"</default>
