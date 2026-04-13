@@ -18,19 +18,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libglib2.0-bin
 
-      - name: Build release bundles
+      - name: Build GNOME extension bundle
         run: |
           make pack
-          make pack-firefox
           mv dist/hacontrolpanel@friedjof.github.io.shell-extension.zip \
             dist/hacontrolpanel@friedjof.github.io-${GITHUB_REF_NAME}.shell-extension.zip
-          mv dist/hacontrolpanel-bridge.firefox-extension.xpi \
-            dist/hacontrolpanel-bridge-${GITHUB_REF_NAME}.firefox-extension.xpi
+
+      - name: Sign Firefox Browser Bridge
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          rm -f dist/*.xpi
+          npx --yes web-ext@8 sign \
+            --channel=unlisted \
+            --source-dir=firefox-extension \
+            --artifacts-dir=dist
+
+          SIGNED_XPI=$(find dist -maxdepth 1 -type f -name '*.xpi' | head -n1)
+          test -n "${SIGNED_XPI}"
+          mv "${SIGNED_XPI}" \
+            "dist/hacontrolpanel-bridge-${GITHUB_REF_NAME}.firefox-extension.xpi"
 
       - name: Upload to extensions.gnome.org
         uses: murar8/gnome-extensions-action@0.1.1
@@ -90,8 +108,9 @@ jobs:
             echo "### Firefox Browser Bridge"
             echo ""
             echo "1. Download \`${FIREFOX_XPI}\` below"
-            echo "2. Open Firefox → \`about:debugging#/runtime/this-firefox\`"
-            echo "3. Click \`Load Temporary Add-on…\` and select the downloaded \`.xpi\`"
+            echo "2. Open Firefox → Add-ons and Themes"
+            echo "3. Open the gear menu → \`Install Add-on From File…\`"
+            echo "4. Select the downloaded signed \`.xpi\`"
             echo ""
             echo "## Update (existing installation)"
             echo ""
